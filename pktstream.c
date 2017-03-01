@@ -25,13 +25,6 @@ MODULE_VERSION("0.1");
 
 
 /*
- * Global variables for the module
- */
-
-byte * pktstream_buffer;
-
-
-/*
  * Data structures used by the module
  */
 
@@ -48,11 +41,22 @@ typedef struct segment {
 
 typedef struct minor_file {
 	// pointer to the first data segment in the minor file
-	struct segment * first_segment;
+	segment * first_segment;
 
 	// pointer to the last data segment in the minor file
-	struct segment * last_segment;
+	segment * last_segment;
 } minor_file;
+
+
+/*
+ * Global variables for the module
+ */
+
+// array of pointers to minor_file data structures
+static minor_file * minor_files[256];
+
+byte * pktstream_buffer;
+
 
 
 
@@ -95,7 +99,7 @@ module_exit(pktstream_exit);
 
 
 /*
- * Function implementations
+ * Module life-cycle utilities
  */
 
 int pktstream_init(void) {
@@ -130,6 +134,11 @@ void pktstream_exit(void){
 	printk(KERN_INFO "removing module: %s\n", DEVICE_NAME);
 }
 
+
+/*
+ * Module open and release
+ */
+
 int pktstream_open(struct inode *node, struct file *file_p){
 	return 0;
 }
@@ -137,6 +146,11 @@ int pktstream_open(struct inode *node, struct file *file_p){
 int pktstream_release(struct inode *node, struct file *file_p){
 	return 0;
 }
+
+
+/*
+ * Module read and write
+ */
 
 ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_pos){
 	copy_to_user(buff, pktstream_buffer, 1);
