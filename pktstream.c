@@ -9,9 +9,8 @@
 #include <linux/tty.h>
 #include <linux/version.h>
 #include <asm/uaccess.h>
+#include "pktstream.h"
 
-#define DEVICE_NAME "pktstrm"
-#define MAJOR_NUM 75
 
 /*
  * Multi-mode packet stream device file.
@@ -29,7 +28,32 @@ MODULE_VERSION("0.1");
  * Global variables for the module
  */
 
-char * pktstream_buffer;
+byte * pktstream_buffer;
+
+
+/*
+ * Data structures used by the module
+ */
+
+typedef struct segment {
+	// current segment size
+	int segment_size;
+	
+	// pointer to the next segment in the linked list
+	struct segment * next;
+
+	// pointer to the actual data
+	byte * segment_buffer;
+} segment;
+
+typedef struct minor_file {
+	// pointer to the first data segment in the minor file
+	struct segment * first_segment;
+
+	// pointer to the last data segment in the minor file
+	struct segment * last_segment;
+} minor_file;
+
 
 
 /*
