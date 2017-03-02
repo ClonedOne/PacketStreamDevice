@@ -13,3 +13,4 @@ clean:
 	rm devfile
 	rm devfile1
 	rm test 
+	sudo dmesg --clear

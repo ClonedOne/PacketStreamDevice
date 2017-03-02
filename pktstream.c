@@ -40,6 +40,8 @@ typedef struct segment {
 } segment;
 
 typedef struct minor_file {
+	// number of clients using this minor
+	int clients;
 	// pointer to the first data segment in the minor file
 	segment * first_segment;
 
@@ -53,11 +55,9 @@ typedef struct minor_file {
  */
 
 // array of pointers to minor_file data structures
-static minor_file * minor_files[256];
+static minor_file * minor_files[256] = {NULL};
 
 byte * pktstream_buffer;
-
-
 
 
 /*
@@ -140,10 +140,72 @@ void pktstream_exit(void){
  */
 
 int pktstream_open(struct inode *node, struct file *file_p){
+	minor_file * current_minor;
+	
+	// retrieving minor number from file descriptor
+	int minor = iminor(file_p -> f_path.dentry -> d_inode);
+	printk(KERN_INFO "%s: opening minor number %d\n", DEVICE_NAME, minor);
+
+	// check if minor number is valid
+	if (minor > 255) {
+		printk(KERN_ALERT "%s: warning opening an invalid minor number %d\n", DEVICE_NAME, minor);
+		return -1;
+	}	
+
+	// if minor number data structure is not initialized, do it
+	if (minor_files[minor] == NULL) {
+		current_minor = kmalloc(sizeof(minor_file), GFP_KERNEL);
+		if (!current_minor) {
+			printk(KERN_ALERT "%s: could not allocate memory for current minor %d\n", DEVICE_NAME, minor);
+			return -1;
+		}
+		
+		current_minor -> clients = 1;
+		current_minor -> first_segment = NULL;
+		current_minor -> last_segment = NULL;
+		printk(KERN_INFO "%s: initialized structures for minor number %d\n", DEVICE_NAME, minor);
+		minor_files[minor] = current_minor;
+	} else {
+	// update the connected clients counter for the current minor
+		current_minor = minor_files[minor];
+		current_minor -> clients++;
+		printk(KERN_INFO "%s: update client count %d for minor number %d\n", DEVICE_NAME, current_minor -> clients, minor);
+	}
+
 	return 0;
 }
 
 int pktstream_release(struct inode *node, struct file *file_p){
+	minor_file * current_minor;
+	
+	// retrieving minor number from file descriptor
+	int minor = iminor(file_p -> f_path.dentry -> d_inode);
+	printk(KERN_INFO "%s: releasing minor number %d\n", DEVICE_NAME, minor);
+
+	// check if minor number is valid
+	if (minor > 255) {
+		printk(KERN_ALERT "%s: warning releasing an invalid minor number %d\n", DEVICE_NAME, minor);
+		return -1;
+	}
+
+	// check if minor number was not previously initialized
+	if (minor_files[minor] == NULL) {			
+		printk(KERN_ALERT "%s: warning releasing a non initialized minor number %d\n", DEVICE_NAME, minor);
+		return -1;
+	}
+
+	// decrease clients counter for minor file
+	current_minor = minor_files[minor];
+	current_minor -> clients--;
+	printk(KERN_INFO "%s: update client count %d for minor number %d\n", DEVICE_NAME, current_minor -> clients, minor);
+
+	// if no clients are connected, release the data structure
+	if (current_minor -> clients == 0) {
+		kfree(current_minor);
+		minor_files[minor] = NULL;
+		printk(KERN_INFO "%s: freed data structures related to minor number %d\n", DEVICE_NAME, minor);
+	}
+
 	return 0;
 }
 

@@ -49,5 +49,7 @@ int main() {
 	write_files(write_size, to_write, fd0, fd1);
 	read_files(read_size, read_char, fd0, fd1);
 
+	close(fd0);
+	close(fd1);
 	return 0;
 }
