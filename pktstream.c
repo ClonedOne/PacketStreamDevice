@@ -41,7 +41,11 @@ typedef struct segment {
 
 typedef struct minor_file {
 	// number of clients using this minor
-	int clients;
+	unsigned int clients;
+
+	// current amount of data bytes maintained in segments
+	unsigned int data_count;
+
 	// pointer to the first data segment in the minor file
 	segment * first_segment;
 
@@ -161,6 +165,7 @@ int pktstream_open(struct inode *node, struct file *file_p){
 		}
 		
 		current_minor -> clients = 1;
+		current_minor -> data_count = 0;
 		current_minor -> first_segment = NULL;
 		current_minor -> last_segment = NULL;
 		printk(KERN_INFO "%s: initialized structures for minor number %d\n", DEVICE_NAME, minor);
@@ -225,7 +230,38 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 }	
 
 ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f_pos) {
+	minor_file * current_minor;
 	char *tmp;
+		
+	// retrieving minor number from file descriptor
+	int minor = iminor(file_p -> f_path.dentry -> d_inode);
+	printk(KERN_INFO "%s: writing on minor number %d\n", DEVICE_NAME, minor);
+
+	// check if minor number is valid
+	if (minor > 255) {
+		printk(KERN_ALERT "%s: warning writing on an invalid minor number %d\n", DEVICE_NAME, minor);
+		return -1;
+	}
+
+	// check if minor number was not previously initialized
+	if (minor_files[minor] == NULL) {			
+		printk(KERN_ALERT "%s: warning writing on a non initialized minor number %d\n", DEVICE_NAME, minor);
+		return -1;
+	}
+	
+	current_minor = minor_files[minor];
+
+	// check size of write is admissible
+	if ((count <= 0) || (current_minor -> data_count + count) >= MAX_FILE_SIZE) {
+		printk(KERN_ALERT "%s: warning message size not admissible %d\n", DEVICE_NAME, count);
+		return -1;
+	}	
+
+	// check if new data would be first segment
+	if (current_minor -> first_segment == NULL) {
+		segment 
+	}	
+
 	tmp = buff + count - 1;
 	copy_from_user(pktstream_buffer, tmp, 1);
 	return 1; 
