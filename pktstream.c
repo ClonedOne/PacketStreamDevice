@@ -61,6 +61,9 @@ typedef struct minor_file {
 // array of pointers to minor_file data structures
 static minor_file * minor_files[256] = {NULL};
 
+// size of data segments
+unsigned int pkt_size; 
+
 byte * pktstream_buffer;
 
 
@@ -79,6 +82,8 @@ ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f
 void pktstream_exit(void);
 
 int pktstream_init(void);
+
+void create_append_segments(minor_file * current_minor, unsigned int cur_size, byte * tmp);
 
 
 /*
@@ -108,6 +113,7 @@ module_exit(pktstream_exit);
 
 int pktstream_init(void) {
 	int major_num;
+	pkt_size = PKT_DEFAULT_SIZE;
 	
 	// Treis to register device major number
 	major_num = register_chrdev(MAJOR_NUM, DEVICE_NAME, &pktstream_fops); 
@@ -231,7 +237,10 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 
 ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f_pos) {
 	minor_file * current_minor;
-	char *tmp;
+	byte *tmp;
+	unsigned int num_pkts;
+	unsigned int residual_bytes;
+	int i;
 		
 	// retrieving minor number from file descriptor
 	int minor = iminor(file_p -> f_path.dentry -> d_inode);
@@ -248,23 +257,49 @@ ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f
 		printk(KERN_ALERT "%s: warning writing on a non initialized minor number %d\n", DEVICE_NAME, minor);
 		return -1;
 	}
-	
 	current_minor = minor_files[minor];
 
 	// check size of write is admissible
 	if ((count <= 0) || (current_minor -> data_count + count) >= MAX_FILE_SIZE) {
-		printk(KERN_ALERT "%s: warning message size not admissible %d\n", DEVICE_NAME, count);
+		printk(KERN_ALERT "%s: warning message size not admissible %zd\n", DEVICE_NAME, count);
 		return -1;
 	}	
 
-	// check if new data would be first segment
-	if (current_minor -> first_segment == NULL) {
-		segment 
-	}	
+	// compute number of packets necessary to contain data
+	num_pkts = count / pkt_size;
+       	residual_bytes = count % pkt_size;	
 
-	tmp = buff + count - 1;
-	copy_from_user(pktstream_buffer, tmp, 1);
+	// generates the list of new segments
+	for (i = 0; i < num_pkts; i++) {
+		tmp = buff + (pkt_size * i);
+		create_append_segments(current_minor, pkt_size, tmp);
+	}
+	if (residual_bytes != 0) {
+		tmp = buff;
+		create_append_segments(current_minor, residual_bytes, tmp);
+	}
+
 	return 1; 
 }	
 
+void create_append_segments(minor_file * current_minor, unsigned int cur_size, byte * tmp) {
+	segment * current_segment;
 
+	// allocate new segment with buffer of specified size
+	current_segment = kmalloc(sizeof(segment), GFP_KERNEL);
+	current_segment -> segment_size = cur_size;
+	current_segment -> next = NULL;
+	current_segment -> segment_buffer = kmalloc(cur_size, GFP_KERNEL);
+	copy_from_user(current_segment -> segment_buffer, tmp, cur_size);
+
+	// check if the minor file list is empty
+	if (current_minor -> last_segment == NULL) {
+		current_minor -> first_segment = current_segment;
+		current_minor -> last_segment = current_segment;
+	} else {
+		// otherwise add segment to the end of the list
+		current_minor -> last_segment -> next = current_segment;
+		current_minor -> last_segment = current_segment;
+	}
+
+}
