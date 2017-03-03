@@ -85,6 +85,8 @@ int pktstream_init(void);
 
 void create_append_segments(minor_file * current_minor, unsigned int cur_size, byte * tmp);
 
+int retrieve_minor_number(struct file *file_p, char * operation);
+
 
 /*
  * Struct declaring the file access functions
@@ -188,22 +190,10 @@ int pktstream_open(struct inode *node, struct file *file_p){
 
 int pktstream_release(struct inode *node, struct file *file_p){
 	minor_file * current_minor;
-	
-	// retrieving minor number from file descriptor
-	int minor = iminor(file_p -> f_path.dentry -> d_inode);
-	printk(KERN_INFO "%s: releasing minor number %d\n", DEVICE_NAME, minor);
+	int minor;	
 
-	// check if minor number is valid
-	if (minor > 255) {
-		printk(KERN_ALERT "%s: warning releasing an invalid minor number %d\n", DEVICE_NAME, minor);
-		return -1;
-	}
-
-	// check if minor number was not previously initialized
-	if (minor_files[minor] == NULL) {			
-		printk(KERN_ALERT "%s: warning releasing a non initialized minor number %d\n", DEVICE_NAME, minor);
-		return -1;
-	}
+	minor = retrieve_minor_number(file_p, "release");
+	if (minor == -1) return -1;
 
 	// decrease clients counter for minor file
 	current_minor = minor_files[minor];
@@ -240,23 +230,11 @@ ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f
 	byte *tmp;
 	unsigned int num_pkts;
 	unsigned int residual_bytes;
+	int minor;
 	int i;
 		
-	// retrieving minor number from file descriptor
-	int minor = iminor(file_p -> f_path.dentry -> d_inode);
-	printk(KERN_INFO "%s: writing on minor number %d\n", DEVICE_NAME, minor);
-
-	// check if minor number is valid
-	if (minor > 255) {
-		printk(KERN_ALERT "%s: warning writing on an invalid minor number %d\n", DEVICE_NAME, minor);
-		return -1;
-	}
-
-	// check if minor number was not previously initialized
-	if (minor_files[minor] == NULL) {			
-		printk(KERN_ALERT "%s: warning writing on a non initialized minor number %d\n", DEVICE_NAME, minor);
-		return -1;
-	}
+	minor = retrieve_minor_number(file_p, "write");
+	if (minor == -1) return -1;
 	current_minor = minor_files[minor];
 
 	// check size of write is admissible
@@ -279,8 +257,37 @@ ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f
 		create_append_segments(current_minor, residual_bytes, tmp);
 	}
 
+ 	tmp = buff + count - 1;
+ 	copy_from_user(pktstream_buffer, tmp, 1);
 	return 1; 
 }	
+
+
+/*
+ * Helper functions
+ */
+
+int retrieve_minor_number(struct file *file_p, char * operation) {
+	int minor;
+	
+	// retrieving minor number from file descriptor
+	minor = iminor(file_p -> f_path.dentry -> d_inode);
+	printk(KERN_INFO "%s: %s on minor number %d\n", DEVICE_NAME, operation, minor);
+
+	// check if minor number is valid
+	if (minor > 255) {
+		printk(KERN_ALERT "%s: %s on invalid minor number %d\n", DEVICE_NAME, operation, minor);
+		return -1;
+	}
+
+	// check if minor number was not previously initialized
+	if (minor_files[minor] == NULL) {			
+		printk(KERN_ALERT "%s: %s on non initialized minor number %d\n", DEVICE_NAME, operation, minor);
+		return -1;
+	}
+
+	return minor;
+}
 
 void create_append_segments(minor_file * current_minor, unsigned int cur_size, byte * tmp) {
 	segment * current_segment;
@@ -302,4 +309,6 @@ void create_append_segments(minor_file * current_minor, unsigned int cur_size, b
 		current_minor -> last_segment = current_segment;
 	}
 
+	current_minor -> data_count += cur_size;
 }
+
