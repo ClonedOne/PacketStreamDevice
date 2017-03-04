@@ -12,6 +12,7 @@
 #include "pktstream.h"
 
 
+
 /*
  * Multi-mode packet stream device file.
  * This driver provides a FIFO device file accessible as either a stream device
@@ -22,6 +23,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Giorgio Severi");
 MODULE_DESCRIPTION("Multi-mode packet stream device file");
 MODULE_VERSION("0.1");
+
 
 
 /*
@@ -54,6 +56,7 @@ typedef struct minor_file {
 } minor_file;
 
 
+
 /*
  * Global variables for the module
  */
@@ -64,7 +67,11 @@ static minor_file * minor_files[256] = {NULL};
 // size of data segments
 unsigned int pkt_size; 
 
+// default operative mode
+device_mode op_mode = PACKET;
+
 byte * pktstream_buffer;
+
 
 
 /*
@@ -87,6 +94,9 @@ void create_append_segments(minor_file * current_minor, unsigned int cur_size, b
 
 int retrieve_minor_number(struct file *file_p, char * operation);
 
+void print_bytes(byte * buff, unsigned int cur_size);
+
+
 
 /*
  * Struct declaring the file access functions
@@ -100,6 +110,7 @@ struct file_operations pktstream_fops = {
 };
 
 
+
 /*
  * Declaration of mandatory init and exit functions
  */
@@ -107,6 +118,7 @@ struct file_operations pktstream_fops = {
 module_init(pktstream_init);
 
 module_exit(pktstream_exit);
+
 
 
 /*
@@ -117,7 +129,7 @@ int pktstream_init(void) {
 	int major_num;
 	pkt_size = PKT_DEFAULT_SIZE;
 	
-	// Treis to register device major number
+	// Try to register device major number
 	major_num = register_chrdev(MAJOR_NUM, DEVICE_NAME, &pktstream_fops); 
 	if (major_num < 0){
 		printk(KERN_ALERT "%s: cannot obtain major number %d\n", DEVICE_NAME, MAJOR_NUM);
@@ -125,7 +137,7 @@ int pktstream_init(void) {
 	}
 	printk(KERN_INFO "%s: registered correctly with major number %d\n",DEVICE_NAME, MAJOR_NUM);	
 
-	// Tries to allocate memory for the buffer
+	// Try to allocate memory for the buffer
 	pktstream_buffer = kmalloc(1, GFP_KERNEL);
 	if (!pktstream_buffer){
 		major_num = -ENOMEM;
@@ -145,6 +157,7 @@ void pktstream_exit(void){
 		kfree(pktstream_buffer);
 	printk(KERN_INFO "removing module: %s\n", DEVICE_NAME);
 }
+
 
 
 /*
@@ -211,18 +224,48 @@ int pktstream_release(struct inode *node, struct file *file_p){
 }
 
 
+
 /*
  * Module read and write
  */
 
 ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_pos){
-	copy_to_user(buff, pktstream_buffer, 1);
+	minor_file * current_minor;
+	segment * current_segment;
+	int minor;
+	
+	minor = retrieve_minor_number(file_p, "read");
+	if (minor == -1) return -1;
+	current_minor = minor_files[minor];
+
+	if (current_minor -> first_segment == NULL){
+		printk(KERN_ALERT "%s: warning reading empty minor %d\n", DEVICE_NAME, minor);
+		return -1;
+	}
+
+	/* if operative mode is PACKET it must read a single packet;
+	 * any bytes not fitting must be discarded
+	 *
+	 * if operative mode is STREAM it must read packets until receiving buffer
+	 * is filled; residual bytes will become a new packet
+	 */
+	if (op_mode == PACKET) {
+		current_segment = current_minor -> first_segment;
+		current_minor -> first_segment = current_segment -> next;		
+		if (current_segment -> segment_buffer != NULL) {
+			print_bytes(current_segment -> segment_buffer, current_segment -> segment_size); 
+		}
+
+	}
+
+	/*copy_to_user(buff, pktstream_buffer, 1);
 	if (*f_pos == 0){
 		*f_pos += 1;
 		return 1;
 	} else {
 		return 0;
-	}
+	}*/
+	return 1;
 }	
 
 ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f_pos) {
@@ -257,10 +300,12 @@ ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f
 		create_append_segments(current_minor, residual_bytes, tmp);
 	}
 
- 	tmp = buff + count - 1;
- 	copy_from_user(pktstream_buffer, tmp, 1);
+ 	/*tmp = buff + count - 1;
+ 	copy_from_user(pktstream_buffer, tmp, 1);*/
 	return 1; 
 }	
+
+
 
 
 /*
@@ -309,6 +354,17 @@ void create_append_segments(minor_file * current_minor, unsigned int cur_size, b
 		current_minor -> last_segment = current_segment;
 	}
 
+	//print_bytes(current_segment -> segment_buffer, current_segment -> segment_size);
+	print_bytes(tmp, cur_size);
 	current_minor -> data_count += cur_size;
+}
+
+void print_bytes(byte * buff, unsigned int cur_size) {
+	int i;
+
+	printk(KERN_INFO "%s: %d bytes ", DEVICE_NAME, cur_size); 
+	for (i = 0; i < cur_size; i++)
+		printk(KERN_INFO "%02X ", buff[i]);
+	printk(KERN_INFO "\n");
 }
 

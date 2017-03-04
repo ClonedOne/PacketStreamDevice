@@ -9,5 +9,6 @@
 
 typedef unsigned char byte;
 
+typedef enum {PACKET, STREAM} device_mode;
 
 #endif

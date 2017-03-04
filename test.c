@@ -20,10 +20,10 @@ void read_files(int read_size, char * read_char, int fd0, int fd1) {
 	memset(read_char, 0, 4096);
 }
 
-void write_files(int write_size, char * to_write, int fd0, int fd1) {
-	write_size = write(fd0, to_write, 1);
+void write_files(int write_size, char * to_write, int fd0, int fd1, int size) {
+	write_size = write(fd0, to_write, size);
 	printf("Bytes written: %d\n", write_size);
-	write_size = write(fd1, to_write, 1);
+	write_size = write(fd1, to_write, size);
 	printf("Bytes written: %d\n", write_size);
 
 }
@@ -35,10 +35,13 @@ int main() {
 	int write_size;
 	char * read_char;
 	char * to_write;
+	int size;
 
 	read_char = malloc(BUF_SIZE);
-	char write_char = 'c';
-	to_write = &write_char;
+	// char write_char = 'c';
+	// to_write = &write_char;
+	to_write = "test";
+	size = strlen(to_write);
 
 	// opening device files with minor numbers 0 and 1
 	fd0 = open("devfile", O_RDWR);
@@ -46,7 +49,7 @@ int main() {
 	printf("file descriptors: %d - %d\n", fd0, fd1);
 	
 	read_files(read_size, read_char, fd0, fd1);
-	write_files(write_size, to_write, fd0, fd1);
+	write_files(write_size, to_write, fd0, fd1, size);
 	read_files(read_size, read_char, fd0, fd1);
 
 	close(fd0);
