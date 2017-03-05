@@ -14,10 +14,10 @@ void read_files(int read_size, char * read_char, int fd0, int fd1) {
 	// reading from both file - both should be empty
 	read_size = read(fd0, read_char, BUF_SIZE);
 	printf("Bytes read: %d, Content: %s\n", read_size, read_char);
-	memset(read_char, 0, 4096);
+	memset(read_char, 0, BUF_SIZE);
 	read_size = read(fd1, read_char, BUF_SIZE);
 	printf("Bytes read: %d, Content: %s\n", read_size, read_char);
-	memset(read_char, 0, 4096);
+	memset(read_char, 0, BUF_SIZE);
 }
 
 void write_files(int write_size, char * to_write, int fd0, int fd1, int size) {
@@ -50,6 +50,7 @@ int main() {
 	
 	read_files(read_size, read_char, fd0, fd1);
 	write_files(write_size, to_write, fd0, fd1, size);
+	read_files(read_size, read_char, fd0, fd1);
 	read_files(read_size, read_char, fd0, fd1);
 
 	close(fd0);

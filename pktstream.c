@@ -70,8 +70,6 @@ unsigned int pkt_size;
 // default operative mode
 device_mode op_mode = PACKET;
 
-byte * pktstream_buffer;
-
 
 
 /*
@@ -137,15 +135,6 @@ int pktstream_init(void) {
 	}
 	printk(KERN_INFO "%s: registered correctly with major number %d\n",DEVICE_NAME, MAJOR_NUM);	
 
-	// Try to allocate memory for the buffer
-	pktstream_buffer = kmalloc(1, GFP_KERNEL);
-	if (!pktstream_buffer){
-		major_num = -ENOMEM;
-		pktstream_exit();
-		return major_num;
-	}
-
-	memset(pktstream_buffer, 0, 1);
 	printk(KERN_INFO "inserting module: %s\n", DEVICE_NAME);
 
 	return 0;
@@ -153,8 +142,6 @@ int pktstream_init(void) {
 
 void pktstream_exit(void){
 	unregister_chrdev(MAJOR_NUM, DEVICE_NAME);
-	if (pktstream_buffer)
-		kfree(pktstream_buffer);
 	printk(KERN_INFO "removing module: %s\n", DEVICE_NAME);
 }
 
@@ -233,6 +220,7 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 	minor_file * current_minor;
 	segment * current_segment;
 	int minor;
+	size_t to_read;
 	
 	minor = retrieve_minor_number(file_p, "read");
 	if (minor == -1) return -1;
@@ -254,18 +242,16 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 		current_minor -> first_segment = current_segment -> next;		
 		if (current_segment -> segment_buffer != NULL) {
 			print_bytes(current_segment -> segment_buffer, current_segment -> segment_size); 
+			to_read = count < current_segment -> segment_size ? count : current_segment -> segment_size;
+			copy_to_user(buff, current_segment -> segment_buffer, to_read);
+			kfree(current_segment -> segment_buffer);
+			kfree(current_segment);
+			return to_read;
 		}
 
 	}
 
-	/*copy_to_user(buff, pktstream_buffer, 1);
-	if (*f_pos == 0){
-		*f_pos += 1;
-		return 1;
-	} else {
-		return 0;
-	}*/
-	return 1;
+	return count;
 }	
 
 ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f_pos) {
@@ -300,9 +286,7 @@ ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f
 		create_append_segments(current_minor, residual_bytes, tmp);
 	}
 
- 	/*tmp = buff + count - 1;
- 	copy_from_user(pktstream_buffer, tmp, 1);*/
-	return 1; 
+	return count; 
 }	
 
 
