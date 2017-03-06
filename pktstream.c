@@ -68,7 +68,7 @@ static minor_file * minor_files[256] = {NULL};
 unsigned int pkt_size; 
 
 // default operative mode
-device_mode op_mode = PACKET;
+device_mode op_mode = STREAM;
 
 
 
@@ -219,9 +219,12 @@ int pktstream_release(struct inode *node, struct file *file_p){
 ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_pos){
 	minor_file * current_minor;
 	segment * current_segment;
+	byte * temporary_buffer;
 	int minor;
 	size_t to_read;
-	
+	size_t already_read;
+	size_t remaining_bytes;
+
 	minor = retrieve_minor_number(file_p, "read");
 	if (minor == -1) return -1;
 	current_minor = minor_files[minor];
@@ -231,6 +234,9 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 		return -1;
 	}
 
+	printk(KERN_INFO "%s: wants to read %zd bytes\n", DEVICE_NAME, count);
+	current_segment = current_minor -> first_segment;
+
 	/* if operative mode is PACKET it must read a single packet;
 	 * any bytes not fitting must be discarded
 	 *
@@ -238,20 +244,57 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 	 * is filled; residual bytes will become a new packet
 	 */
 	if (op_mode == PACKET) {
-		current_segment = current_minor -> first_segment;
+		printk(KERN_INFO "%s: reading as packet\n", DEVICE_NAME);
 		current_minor -> first_segment = current_segment -> next;		
-		if (current_segment -> segment_buffer != NULL) {
-			print_bytes(current_segment -> segment_buffer, current_segment -> segment_size); 
-			to_read = count < current_segment -> segment_size ? count : current_segment -> segment_size;
-			copy_to_user(buff, current_segment -> segment_buffer, to_read);
-			kfree(current_segment -> segment_buffer);
-			kfree(current_segment);
-			return to_read;
+		if (current_segment -> segment_buffer == NULL) {
+			printk(KERN_ALERT "%s: segment data is null\n", DEVICE_NAME);
+			return -1;
 		}
 
-	}
+		to_read = count < current_segment -> segment_size ? count : current_segment -> segment_size;
+		copy_to_user(buff, current_segment -> segment_buffer, to_read);
+		kfree(current_segment -> segment_buffer);
+		kfree(current_segment);
+		return to_read;
+	} else {
+		printk(KERN_INFO "%s: reading as stream\n", DEVICE_NAME);
+		already_read = 0;
 
-	return count;
+		while (already_read < count && current_segment -> segment_buffer != NULL) {
+
+			/* if the size of data contained in this segment plus what has already
+			 * been read fit in the receiving buffer, read it
+			 *
+			 * else compute the size that can fit in receiving buffer and update
+			 * current first segment with the new remaining data
+			 */
+			if ((already_read + current_segment -> segment_size) <= count){
+				printk(KERN_INFO "%s: can read whole segment\n", DEVICE_NAME);
+				to_read = current_segment -> segment_size;
+				copy_to_user(buff + already_read, current_segment -> segment_buffer, to_read);
+				current_minor -> first_segment = current_segment -> next;
+				kfree(current_segment -> segment_buffer);
+				kfree(current_segment);	
+			} else {
+				printk(KERN_INFO "%s: must split segment\n", DEVICE_NAME);
+				printk(KERN_INFO "%s: current segment size = %d\n", DEVICE_NAME, current_segment -> segment_size);
+				remaining_bytes = (already_read + current_segment -> segment_size) - count;
+				printk(KERN_INFO "%s: remaining_bytes = %zd\n", DEVICE_NAME, remaining_bytes);
+				to_read = current_segment -> segment_size - remaining_bytes;
+				copy_to_user(buff + already_read, current_segment ->segment_buffer, to_read);
+				temporary_buffer = kmalloc(remaining_bytes, GFP_KERNEL);
+				memcpy(temporary_buffer, current_segment -> segment_buffer + to_read, remaining_bytes);	
+				kfree(current_segment -> segment_buffer);
+				current_segment -> segment_buffer = temporary_buffer;
+				current_segment -> segment_size = remaining_bytes;
+			}
+	
+			printk(KERN_INFO "%s: to_read = %zd\n", DEVICE_NAME, to_read);
+			already_read += to_read;
+			printk(KERN_INFO "%s: already_read = %zd, count = %zd\n", DEVICE_NAME, already_read, count);
+		}
+		return already_read;
+	}
 }	
 
 ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f_pos) {
@@ -323,9 +366,20 @@ void create_append_segments(minor_file * current_minor, unsigned int cur_size, b
 
 	// allocate new segment with buffer of specified size
 	current_segment = kmalloc(sizeof(segment), GFP_KERNEL);
+	if (!current_segment) {
+		printk(KERN_ALERT "%s: could not allocate memory for new segment\n", DEVICE_NAME);
+		return;
+	}
 	current_segment -> segment_size = cur_size;
 	current_segment -> next = NULL;
+	
+	// allocate new segment data
 	current_segment -> segment_buffer = kmalloc(cur_size, GFP_KERNEL);
+	if (!current_segment -> segment_buffer){
+		printk(KERN_ALERT "%s: could not allocate memory for segment data\n", DEVICE_NAME);
+		kfree(current_segment);
+		return;
+	}
 	copy_from_user(current_segment -> segment_buffer, tmp, cur_size);
 
 	// check if the minor file list is empty
@@ -338,8 +392,6 @@ void create_append_segments(minor_file * current_minor, unsigned int cur_size, b
 		current_minor -> last_segment = current_segment;
 	}
 
-	//print_bytes(current_segment -> segment_buffer, current_segment -> segment_size);
-	print_bytes(tmp, cur_size);
 	current_minor -> data_count += cur_size;
 }
 
