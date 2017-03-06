@@ -32,7 +32,7 @@ MODULE_VERSION("0.1");
 
 typedef struct segment {
 	// current segment size
-	int segment_size;
+	size_t segment_size;
 	
 	// pointer to the next segment in the linked list
 	struct segment * next;
@@ -46,7 +46,7 @@ typedef struct minor_file {
 	unsigned int clients;
 
 	// current amount of data bytes maintained in segments
-	unsigned int data_count;
+	size_t data_count;
 
 	// pointer to the first data segment in the minor file
 	segment * first_segment;
@@ -236,6 +236,10 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 
 	printk(KERN_INFO "%s: wants to read %zd bytes\n", DEVICE_NAME, count);
 	current_segment = current_minor -> first_segment;
+	if (current_segment -> segment_buffer == NULL) {
+		printk(KERN_ALERT "%s: segment data is null\n", DEVICE_NAME);
+		return -1;
+	}
 
 	/* if operative mode is PACKET it must read a single packet;
 	 * any bytes not fitting must be discarded
@@ -246,11 +250,6 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 	if (op_mode == PACKET) {
 		printk(KERN_INFO "%s: reading as packet\n", DEVICE_NAME);
 		current_minor -> first_segment = current_segment -> next;		
-		if (current_segment -> segment_buffer == NULL) {
-			printk(KERN_ALERT "%s: segment data is null\n", DEVICE_NAME);
-			return -1;
-		}
-
 		to_read = count < current_segment -> segment_size ? count : current_segment -> segment_size;
 		copy_to_user(buff, current_segment -> segment_buffer, to_read);
 		kfree(current_segment -> segment_buffer);
@@ -261,7 +260,8 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 		already_read = 0;
 
 		while (already_read < count && current_segment -> segment_buffer != NULL) {
-
+			printk(KERN_INFO "%s: current segment size = %zd\n", DEVICE_NAME, current_segment -> segment_size);
+			
 			/* if the size of data contained in this segment plus what has already
 			 * been read fit in the receiving buffer, read it
 			 *
@@ -277,7 +277,6 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 				kfree(current_segment);	
 			} else {
 				printk(KERN_INFO "%s: must split segment\n", DEVICE_NAME);
-				printk(KERN_INFO "%s: current segment size = %d\n", DEVICE_NAME, current_segment -> segment_size);
 				remaining_bytes = (already_read + current_segment -> segment_size) - count;
 				printk(KERN_INFO "%s: remaining_bytes = %zd\n", DEVICE_NAME, remaining_bytes);
 				to_read = current_segment -> segment_size - remaining_bytes;
@@ -292,6 +291,7 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 			printk(KERN_INFO "%s: to_read = %zd\n", DEVICE_NAME, to_read);
 			already_read += to_read;
 			printk(KERN_INFO "%s: already_read = %zd, count = %zd\n", DEVICE_NAME, already_read, count);
+			current_segment = current_minor -> first_segment;
 		}
 		return already_read;
 	}
@@ -339,6 +339,10 @@ ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f
  * Helper functions
  */
 
+/*
+ * retrieve minor number from file pointer 
+ * check if related device file is initialized
+ */
 int retrieve_minor_number(struct file *file_p, char * operation) {
 	int minor;
 	
@@ -361,6 +365,9 @@ int retrieve_minor_number(struct file *file_p, char * operation) {
 	return minor;
 }
 
+/* 
+ * create and append a new segment
+ */
 void create_append_segments(minor_file * current_minor, unsigned int cur_size, byte * tmp) {
 	segment * current_segment;
 
@@ -392,9 +399,13 @@ void create_append_segments(minor_file * current_minor, unsigned int cur_size, b
 		current_minor -> last_segment = current_segment;
 	}
 
+	print_bytes(current_segment -> segment_buffer, current_segment -> segment_size);
 	current_minor -> data_count += cur_size;
 }
 
+/*
+ * print the byte content of a buffer
+ */
 void print_bytes(byte * buff, unsigned int cur_size) {
 	int i;
 
