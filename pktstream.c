@@ -8,6 +8,7 @@
 #include <linux/pid.h>	
 #include <linux/tty.h>
 #include <linux/version.h>
+#include <asm/mutex.h>
 #include <asm/uaccess.h>
 #include "pktstream.h"
 
@@ -48,6 +49,18 @@ typedef struct minor_file {
 	// current amount of data bytes maintained in segments
 	size_t data_count;
 
+	// current default segment size
+	size_t def_segment_size;
+
+	// current maximum file size
+	size_t file_size;
+
+	// semaphore for both read and write access
+	struct mutex rw_access;
+
+	// operational mode of the file
+	device_mode op_mode;
+
 	// pointer to the first data segment in the minor file
 	segment * first_segment;
 
@@ -64,11 +77,8 @@ typedef struct minor_file {
 // array of pointers to minor_file data structures
 static minor_file * minor_files[256] = {NULL};
 
-// size of data segments
-unsigned int pkt_size; 
-
-// default operative mode
-device_mode op_mode = STREAM;
+// general lock for global variable modifications
+struct mutex general_lock;
 
 
 
@@ -88,6 +98,8 @@ void pktstream_exit(void);
 
 int pktstream_init(void);
 
+long pktstream_ioctl(struct file *file_p, unsigned int ioctl_cmd, unsigned long ioctl_arg);
+
 void create_append_segments(minor_file * current_minor, unsigned int cur_size, byte * tmp);
 
 int retrieve_minor_number(struct file *file_p, char * operation);
@@ -104,7 +116,8 @@ struct file_operations pktstream_fops = {
 	.read = pktstream_read,
 	.write = pktstream_write,
 	.open = pktstream_open,
-	.release = pktstream_release
+	.release = pktstream_release,
+	.unlocked_ioctl = pktstream_ioctl
 };
 
 
@@ -125,7 +138,6 @@ module_exit(pktstream_exit);
 
 int pktstream_init(void) {
 	int major_num;
-	pkt_size = PKT_DEFAULT_SIZE;
 	
 	// Try to register device major number
 	major_num = register_chrdev(MAJOR_NUM, DEVICE_NAME, &pktstream_fops); 
@@ -134,6 +146,8 @@ int pktstream_init(void) {
 		return major_num;
 	}
 	printk(KERN_INFO "%s: registered correctly with major number %d\n",DEVICE_NAME, MAJOR_NUM);	
+
+	mutex_init(&general_lock);
 
 	printk(KERN_INFO "inserting module: %s\n", DEVICE_NAME);
 
@@ -164,18 +178,33 @@ int pktstream_open(struct inode *node, struct file *file_p){
 		return -1;
 	}	
 
+	// obtain general lock mutex
+	if (mutex_lock_interruptible(&general_lock) != 0){
+		printk(KERN_ALERT "%s: could not hold mutex on minor %d\n", DEVICE_NAME, minor);
+		return -1;
+	}
+
 	// if minor number data structure is not initialized, do it
 	if (minor_files[minor] == NULL) {
 		current_minor = kmalloc(sizeof(minor_file), GFP_KERNEL);
 		if (!current_minor) {
 			printk(KERN_ALERT "%s: could not allocate memory for current minor %d\n", DEVICE_NAME, minor);
+			mutex_unlock(&general_lock);
 			return -1;
 		}
 		
-		current_minor -> clients = 1;
-		current_minor -> data_count = 0;
+		// initialize current minor's default values 
 		current_minor -> first_segment = NULL;
 		current_minor -> last_segment = NULL;
+		current_minor -> clients = 1;
+		current_minor -> data_count = 0;
+		// set default packet size
+		current_minor -> def_segment_size = PKT_DEFAULT_SIZE;
+		// set PACKET as default operative mode
+		current_minor -> op_mode = PACKET;
+		// initialize semaphore
+		mutex_init(&(current_minor -> rw_access));
+
 		printk(KERN_INFO "%s: initialized structures for minor number %d\n", DEVICE_NAME, minor);
 		minor_files[minor] = current_minor;
 	} else {
@@ -185,6 +214,7 @@ int pktstream_open(struct inode *node, struct file *file_p){
 		printk(KERN_INFO "%s: update client count %d for minor number %d\n", DEVICE_NAME, current_minor -> clients, minor);
 	}
 
+	mutex_unlock(&general_lock);
 	return 0;
 }
 
@@ -194,6 +224,12 @@ int pktstream_release(struct inode *node, struct file *file_p){
 
 	minor = retrieve_minor_number(file_p, "release");
 	if (minor == -1) return -1;
+
+	// obtain general lock mutex
+	if (mutex_lock_interruptible(&general_lock) != 0){
+		printk(KERN_ALERT "%s: could not hold mutex on minor %d\n", DEVICE_NAME, minor);
+		return -1;
+	}
 
 	// decrease clients counter for minor file
 	current_minor = minor_files[minor];
@@ -206,7 +242,8 @@ int pktstream_release(struct inode *node, struct file *file_p){
 		minor_files[minor] = NULL;
 		printk(KERN_INFO "%s: freed data structures related to minor number %d\n", DEVICE_NAME, minor);
 	}
-
+		
+	mutex_unlock(&general_lock);
 	return 0;
 }
 
@@ -228,9 +265,14 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 	minor = retrieve_minor_number(file_p, "read");
 	if (minor == -1) return -1;
 	current_minor = minor_files[minor];
+	if (mutex_lock_interruptible(&(current_minor -> rw_access)) != 0){
+		printk(KERN_ALERT "%s: could not hold mutex on minor %d\n", DEVICE_NAME, minor);
+		return -1;
+	}
 
 	if (current_minor -> first_segment == NULL){
 		printk(KERN_ALERT "%s: warning reading empty minor %d\n", DEVICE_NAME, minor);
+		mutex_unlock(&(current_minor -> rw_access));
 		return -1;
 	}
 
@@ -238,80 +280,96 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 	current_segment = current_minor -> first_segment;
 	if (current_segment -> segment_buffer == NULL) {
 		printk(KERN_ALERT "%s: segment data is null\n", DEVICE_NAME);
+		mutex_unlock(&(current_minor -> rw_access));
 		return -1;
 	}
 
 	/* if operative mode is PACKET it must read a single packet;
 	 * any bytes not fitting must be discarded
-	 *
-	 * if operative mode is STREAM it must read packets until receiving buffer
-	 * is filled; residual bytes will become a new packet
 	 */
-	if (op_mode == PACKET) {
+	if (current_minor -> op_mode == PACKET) {
 		printk(KERN_INFO "%s: reading as packet\n", DEVICE_NAME);
-		current_minor -> first_segment = current_segment -> next;		
+		current_minor -> first_segment = current_segment -> next;
 		to_read = count < current_segment -> segment_size ? count : current_segment -> segment_size;
 		copy_to_user(buff, current_segment -> segment_buffer, to_read);
 		kfree(current_segment -> segment_buffer);
 		kfree(current_segment);
+		mutex_unlock(&(current_minor -> rw_access));
 		return to_read;
-	} else {
-		printk(KERN_INFO "%s: reading as stream\n", DEVICE_NAME);
-		already_read = 0;
-
-		while (already_read < count && current_segment -> segment_buffer != NULL) {
-			printk(KERN_INFO "%s: current segment size = %zd\n", DEVICE_NAME, current_segment -> segment_size);
-			
-			/* if the size of data contained in this segment plus what has already
-			 * been read fit in the receiving buffer, read it
-			 *
-			 * else compute the size that can fit in receiving buffer and update
-			 * current first segment with the new remaining data
-			 */
-			if ((already_read + current_segment -> segment_size) <= count){
-				printk(KERN_INFO "%s: can read whole segment\n", DEVICE_NAME);
-				to_read = current_segment -> segment_size;
-				copy_to_user(buff + already_read, current_segment -> segment_buffer, to_read);
-				current_minor -> first_segment = current_segment -> next;
-				kfree(current_segment -> segment_buffer);
-				kfree(current_segment);	
-			} else {
-				printk(KERN_INFO "%s: must split segment\n", DEVICE_NAME);
-				remaining_bytes = (already_read + current_segment -> segment_size) - count;
-				printk(KERN_INFO "%s: remaining_bytes = %zd\n", DEVICE_NAME, remaining_bytes);
-				to_read = current_segment -> segment_size - remaining_bytes;
-				copy_to_user(buff + already_read, current_segment ->segment_buffer, to_read);
-				temporary_buffer = kmalloc(remaining_bytes, GFP_KERNEL);
-				memcpy(temporary_buffer, current_segment -> segment_buffer + to_read, remaining_bytes);	
-				kfree(current_segment -> segment_buffer);
-				current_segment -> segment_buffer = temporary_buffer;
-				current_segment -> segment_size = remaining_bytes;
-			}
-	
-			printk(KERN_INFO "%s: to_read = %zd\n", DEVICE_NAME, to_read);
-			already_read += to_read;
-			printk(KERN_INFO "%s: already_read = %zd, count = %zd\n", DEVICE_NAME, already_read, count);
-			current_segment = current_minor -> first_segment;
-		}
-		return already_read;
 	}
+
+	/*
+	 * otherwise operative mode is STREAM, it must read packets until receiving buffer
+	 * is filled; residual bytes will become a new packet
+	 */
+	printk(KERN_INFO "%s: reading as stream\n", DEVICE_NAME);
+	// already_read keeps the current amount of bytes read 
+	already_read = 0;
+
+	while (already_read < count && current_segment -> segment_buffer != NULL) {
+		printk(KERN_INFO "%s: current segment size = %zd\n", DEVICE_NAME, current_segment -> segment_size);
+		
+		/* if the size of data contained in this segment plus what has already
+		 * been read fit in the receiving buffer, read it
+		 *
+		 * else compute the size that can fit in receiving buffer and update
+		 * current first segment with the new remaining data
+		 */
+		if ((already_read + current_segment -> segment_size) <= count){
+			printk(KERN_INFO "%s: can read whole segment\n", DEVICE_NAME);
+			to_read = current_segment -> segment_size;
+			copy_to_user(buff + already_read, current_segment -> segment_buffer, to_read);
+			current_minor -> first_segment = current_segment -> next;
+			kfree(current_segment -> segment_buffer);
+			kfree(current_segment);	
+		} else {
+			printk(KERN_INFO "%s: must split segment\n", DEVICE_NAME);
+			remaining_bytes = (already_read + current_segment -> segment_size) - count;
+			printk(KERN_INFO "%s: remaining_bytes = %zd\n", DEVICE_NAME, remaining_bytes);
+			to_read = current_segment -> segment_size - remaining_bytes;
+			copy_to_user(buff + already_read, current_segment ->segment_buffer, to_read);
+			temporary_buffer = kmalloc(remaining_bytes, GFP_KERNEL);
+			memcpy(temporary_buffer, current_segment -> segment_buffer + to_read, remaining_bytes);	
+			kfree(current_segment -> segment_buffer);
+			current_segment -> segment_buffer = temporary_buffer;
+			current_segment -> segment_size = remaining_bytes;
+		}
+
+		printk(KERN_INFO "%s: to_read = %zd\n", DEVICE_NAME, to_read);
+		already_read += to_read;
+		printk(KERN_INFO "%s: already_read = %zd, count = %zd\n", DEVICE_NAME, already_read, count);
+		current_segment = current_minor -> first_segment;
+	}
+
+	mutex_unlock(&(current_minor -> rw_access));
+	return already_read;
+
 }	
 
 ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f_pos) {
 	minor_file * current_minor;
 	byte *tmp;
-	unsigned int num_pkts;
-	unsigned int residual_bytes;
+	size_t num_pkts;
+	size_t residual_bytes;
+	size_t pkt_size;
 	int minor;
 	int i;
 		
 	minor = retrieve_minor_number(file_p, "write");
 	if (minor == -1) return -1;
 	current_minor = minor_files[minor];
+	
+	if (mutex_lock_interruptible(&(current_minor -> rw_access)) != 0){
+		printk(KERN_ALERT "%s: could not hold mutex on minor %d\n", DEVICE_NAME, minor);
+		return -1;
+	}
+
+	pkt_size = current_minor -> def_segment_size;
 
 	// check size of write is admissible
 	if ((count <= 0) || (current_minor -> data_count + count) >= MAX_FILE_SIZE) {
 		printk(KERN_ALERT "%s: warning message size not admissible %zd\n", DEVICE_NAME, count);
+		mutex_unlock(&(current_minor -> rw_access));
 		return -1;
 	}	
 
@@ -329,9 +387,9 @@ ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f
 		create_append_segments(current_minor, residual_bytes, tmp);
 	}
 
+	mutex_unlock(&(current_minor -> rw_access));
 	return count; 
 }	
-
 
 
 
@@ -413,5 +471,67 @@ void print_bytes(byte * buff, unsigned int cur_size) {
 	for (i = 0; i < cur_size; i++)
 		printk(KERN_INFO "%02X ", buff[i]);
 	printk(KERN_INFO "\n");
+}
+
+
+
+/*
+ * IOCTL function
+ */
+
+long pktstream_ioctl(struct file *file_p, unsigned int ioctl_cmd, unsigned long ioctl_arg){
+	long result;
+	int minor;
+	minor_file * current_minor;
+
+	// variables initialization
+	minor = retrieve_minor_number(file_p, "ioctl");
+	if (minor == -1) return -1;
+	current_minor = minor_files[minor];
+	result = -1;
+
+	if (mutex_lock_interruptible(&(current_minor -> rw_access)) != 0){
+		printk(KERN_ALERT "%s: could not hold mutex on minor %d\n", DEVICE_NAME, minor);
+		return -1;
+	}
+
+	switch(ioctl_cmd) {
+
+		// set current operative mode to packet
+		case PKTSTRM_IOCTL_SET_MODE_PACKET:
+			current_minor -> op_mode = STREAM;
+			result = 0;
+			break;
+
+		// set current operative mode to stream
+		case PKTSTRM_IOCTL_SET_MODE_STREAM:
+			current_minor -> op_mode = STREAM;
+			result = 0;
+			break;
+		
+		// set segment size to passed argument
+		case PKTSTRM_IOCTL_SET_PKT_SIZE:
+			if (ioctl_arg == 0 || ioctl_arg > MAX_PKT_SIZE) {
+				printk(KERN_ALERT "%s: ioctl invalid packet size %zd\n", DEVICE_NAME, ioctl_arg);
+				mutex_unlock(&(current_minor -> rw_access));
+				return result;
+			}	
+			current_minor -> def_segment_size = ioctl_arg;
+			result = 0;
+			break;
+		
+		// set file size to passed argument
+		case PKTSTRM_IOCTL_SET_FILE_SIZE:
+			if (ioctl_arg == 0 || ioctl_arg > MAX_FILE_SIZE || ioctl_arg < current_minor -> data_count) {
+				printk(KERN_ALERT "%s: ioctl invalid file size %zd\n", DEVICE_NAME, ioctl_arg);
+				mutex_unlock(&(current_minor -> rw_access));
+				return result;
+			}
+			current_minor -> file_size = ioctl_arg;
+			result = 0;
+			break;
+	}
+	mutex_unlock(&(current_minor -> rw_access));
+	return result;
 }
 
