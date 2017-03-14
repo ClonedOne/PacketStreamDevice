@@ -93,7 +93,7 @@ int pktstream_release(struct inode *node, struct file *file_p);
 
 ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_pos);
 
-ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f_pos);
+ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, loff_t *f_pos);
 
 void pktstream_exit(void);
 
@@ -101,7 +101,7 @@ int pktstream_init(void);
 
 long pktstream_ioctl(struct file *file_p, unsigned int ioctl_cmd, unsigned long ioctl_arg);
 
-void create_append_segments(minor_file * current_minor, unsigned int cur_size, byte * tmp);
+void create_append_segments(minor_file * current_minor, unsigned int cur_size, const byte * tmp);
 
 int retrieve_minor_number(struct file *file_p, char * operation);
 
@@ -347,9 +347,9 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 
 }	
 
-ssize_t pktstream_write(struct file *file_p, char *buff, size_t count, loff_t *f_pos) {
+ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, loff_t *f_pos) {
 	minor_file * current_minor;
-	byte *tmp;
+	const byte *tmp;
 	size_t num_pkts;
 	size_t residual_bytes;
 	size_t pkt_size;
@@ -427,7 +427,7 @@ int retrieve_minor_number(struct file *file_p, char * operation) {
 /* 
  * create and append a new segment
  */
-void create_append_segments(minor_file * current_minor, unsigned int cur_size, byte * tmp) {
+void create_append_segments(minor_file * current_minor, unsigned int cur_size, const byte * tmp) {
 	segment * current_segment;
 
 	// allocate new segment with buffer of specified size
