@@ -5,6 +5,7 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/sched.h>	
+#include <linux/wait.h>	
 #include <linux/pid.h>	
 #include <linux/tty.h>
 #include <linux/version.h>

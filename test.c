@@ -14,17 +14,17 @@ void read_files(int read_size, char * read_char, int fd0, int fd1) {
 	read_size = read(fd0, read_char, 4);
 	printf("Bytes read: %d, Content: %s\n", read_size, read_char);
 	memset(read_char, 0, BUF_SIZE);
-/*	read_size = read(fd1, read_char, 2);
+	read_size = read(fd1, read_char, 2);
 	printf("Bytes read: %d, Content: %s\n", read_size, read_char);
-	memset(read_char, 0, BUF_SIZE); */
+	memset(read_char, 0, BUF_SIZE); 
 }
 
 void write_files(int write_size, char * to_write, int fd0, int fd1, int size) {
 	write_size = write(fd0, to_write, size);
 	printf("Bytes written: %d\n", write_size);
-/*	write_size = write(fd1, to_write, size);
+	write_size = write(fd1, to_write, size);
 	printf("Bytes written: %d\n", write_size);
-*/
+
 }
 
 int main() {
