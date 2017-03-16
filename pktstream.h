@@ -17,5 +17,6 @@
 typedef unsigned char byte;
 
 typedef enum {PACKET, STREAM} device_mode;
+typedef enum {NON_BLOCK, BLOCK} access_mode;
 
 #endif

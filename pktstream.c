@@ -59,8 +59,17 @@ typedef struct minor_file {
 	// semaphore for both read and write access
 	struct mutex rw_access;
 
+	// wait queue for reading access
+	wait_queue_head_t read_queue;
+	
+	// wait queue for writing access
+	wait_queue_head_t write_queue;
+
 	// operational mode of the file
 	device_mode op_mode;
+
+	// access mode of the file
+	access_mode ac_mode;
 
 	// pointer to the first data segment in the minor file
 	segment * first_segment;
@@ -187,7 +196,7 @@ int pktstream_open(struct inode *node, struct file *file_p){
 
 	// if minor number data structure is not initialized, do it
 	if (minor_files[minor] == NULL) {
-		current_minor = kmalloc(sizeof(minor_file), GFP_KERNEL);
+		current_minor = kzalloc(sizeof(minor_file), GFP_KERNEL);
 		if (!current_minor) {
 			printk(KERN_ALERT "%s: could not allocate memory for current minor %d\n", DEVICE_NAME, minor);
 			mutex_unlock(&general_lock);
@@ -199,12 +208,14 @@ int pktstream_open(struct inode *node, struct file *file_p){
 		current_minor -> last_segment = NULL;
 		current_minor -> clients = 1;
 		current_minor -> data_count = 0;
-		// set default packet size
 		current_minor -> def_segment_size = PKT_DEFAULT_SIZE;
-		// set PACKET as default operative mode
 		current_minor -> op_mode = PACKET;
-		// initialize semaphore
+		current_minor -> op_mode = PACKET;
+
+		// initialize semaphore and wait queues
 		mutex_init(&(current_minor -> rw_access));
+		init_waitqueue_head(&(current_minor -> read_queue));
+		init_waitqueue_head(&(current_minor -> write_queue));
 
 		printk(KERN_INFO "%s: initialized structures for minor number %d\n", DEVICE_NAME, minor);
 		minor_files[minor] = current_minor;
@@ -266,6 +277,8 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 	minor = retrieve_minor_number(file_p, "read");
 	if (minor == -1) return -1;
 	current_minor = minor_files[minor];
+
+	// Try to hold mutex, if interrupted exit with error
 	if (mutex_lock_interruptible(&(current_minor -> rw_access)) != 0){
 		printk(KERN_ALERT "%s: could not hold mutex on minor %d\n", DEVICE_NAME, minor);
 		return -1;
@@ -279,11 +292,6 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 
 	printk(KERN_INFO "%s: wants to read %zd bytes\n", DEVICE_NAME, count);
 	current_segment = current_minor -> first_segment;
-	if (current_segment -> segment_buffer == NULL) {
-		printk(KERN_ALERT "%s: segment data is null\n", DEVICE_NAME);
-		mutex_unlock(&(current_minor -> rw_access));
-		return -1;
-	}
 
 	/* if operative mode is PACKET it must read a single packet;
 	 * any bytes not fitting must be discarded
@@ -329,7 +337,7 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 			printk(KERN_INFO "%s: remaining_bytes = %zd\n", DEVICE_NAME, remaining_bytes);
 			to_read = current_segment -> segment_size - remaining_bytes;
 			copy_to_user(buff + already_read, current_segment ->segment_buffer, to_read);
-			temporary_buffer = kmalloc(remaining_bytes, GFP_KERNEL);
+			temporary_buffer = kzalloc(remaining_bytes, GFP_KERNEL);
 			memcpy(temporary_buffer, current_segment -> segment_buffer + to_read, remaining_bytes);	
 			kfree(current_segment -> segment_buffer);
 			current_segment -> segment_buffer = temporary_buffer;
@@ -360,6 +368,7 @@ ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, lof
 	if (minor == -1) return -1;
 	current_minor = minor_files[minor];
 	
+	// Try to hold mutex, if interrupted exit with error
 	if (mutex_lock_interruptible(&(current_minor -> rw_access)) != 0){
 		printk(KERN_ALERT "%s: could not hold mutex on minor %d\n", DEVICE_NAME, minor);
 		return -1;
@@ -368,11 +377,28 @@ ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, lof
 	pkt_size = current_minor -> def_segment_size;
 
 	// check size of write is admissible
-	if ((count <= 0) || (current_minor -> data_count + count) >= MAX_FILE_SIZE) {
+	if ((count == 0) || (current_minor -> data_count + count) >= current_minor -> file_size) {
 		printk(KERN_ALERT "%s: warning message size not admissible %zd\n", DEVICE_NAME, count);
 		mutex_unlock(&(current_minor -> rw_access));
 		return -1;
 	}	
+
+	// check if new data would fit in file given current occupancy level
+	if (current_minor -> data_count + count > current_minor -> file_size) {
+		// if non blocking exit with error
+		if (current_minor -> ac_mode == NON_BLOCK) {
+			printk(KERN_ALERT "%s: warning not enough space to write %zd\n", DEVICE_NAME, count);
+			mutex_unlock(&(current_minor -> rw_access));
+			return -1;
+		}
+		mutex_unlock(&(current_minor -> rw_access));
+		// if blocking put the client process to sleep
+		if (wait_event_interruptible(current_minor -> write_queue, current_minor -> data_count + count <= current_minor -> file_size)){
+			printk(KERN_ALERT "%s: interrupted while waiting to write on %d\n", DEVICE_NAME, minor);
+			return -1;
+		}
+
+	}
 
 	// compute number of packets necessary to contain data
 	num_pkts = count / pkt_size;
@@ -431,7 +457,7 @@ void create_append_segments(minor_file * current_minor, unsigned int cur_size, c
 	segment * current_segment;
 
 	// allocate new segment with buffer of specified size
-	current_segment = kmalloc(sizeof(segment), GFP_KERNEL);
+	current_segment = kzalloc(sizeof(segment), GFP_KERNEL);
 	if (!current_segment) {
 		printk(KERN_ALERT "%s: could not allocate memory for new segment\n", DEVICE_NAME);
 		return;
@@ -440,7 +466,7 @@ void create_append_segments(minor_file * current_minor, unsigned int cur_size, c
 	current_segment -> next = NULL;
 	
 	// allocate new segment data
-	current_segment -> segment_buffer = kmalloc(cur_size, GFP_KERNEL);
+	current_segment -> segment_buffer = kzalloc(cur_size, GFP_KERNEL);
 	if (!current_segment -> segment_buffer){
 		printk(KERN_ALERT "%s: could not allocate memory for segment data\n", DEVICE_NAME);
 		kfree(current_segment);
