@@ -27,59 +27,6 @@ MODULE_DESCRIPTION("Multi-mode packet stream device file");
 MODULE_VERSION("0.1");
 
 
-
-/*
- * Data structures used by the module
- */
-
-typedef struct segment {
-	// current segment size
-	size_t segment_size;
-	
-	// pointer to the next segment in the linked list
-	struct segment * next;
-
-	// pointer to the actual data
-	byte * segment_buffer;
-} segment;
-
-typedef struct minor_file {
-	// number of clients using this minor
-	unsigned int clients;
-
-	// current amount of data bytes maintained in segments
-	size_t data_count;
-
-	// current default segment size
-	size_t def_segment_size;
-
-	// current maximum file size
-	size_t file_size;
-
-	// semaphore for both read and write access
-	struct mutex rw_access;
-
-	// wait queue for reading access
-	wait_queue_head_t read_queue;
-	
-	// wait queue for writing access
-	wait_queue_head_t write_queue;
-
-	// operational mode of the file
-	device_mode op_mode;
-
-	// access mode of the file
-	access_mode ac_mode;
-
-	// pointer to the first data segment in the minor file
-	segment * first_segment;
-
-	// pointer to the last data segment in the minor file
-	segment * last_segment;
-} minor_file;
-
-
-
 /*
  * Global variables for the module
  */
@@ -135,7 +82,7 @@ struct file_operations pktstream_fops = {
 
 
 /*
- * Declaration of mandatory init and exit functions
+ * Mandatory initialization and exit functions
  */
 
 module_init(pktstream_init);
@@ -277,10 +224,22 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 	// acquire lock
 	if(acquire_lock(current_minor, minor) != 0) return -ERESTARTSYS;
 
-	if (current_minor -> first_segment == NULL){
-		printk(KERN_ALERT "%s: warning reading empty minor %d\n", DEVICE_NAME, minor);
+	// check if there is no data to read
+	while (current_minor -> first_segment == NULL){
 		mutex_unlock(&(current_minor -> rw_access));
-		return -1;
+
+		// if non-blocking exit with error
+		if (current_minor -> ac_mode == NON_BLOCK) {
+			printk(KERN_ALERT "%s: warning reading empty file %d\n", DEVICE_NAME, minor);
+			return -EAGAIN;
+		}
+		
+		// if blocking put the client process to sleep
+		if (wait_event_interruptible(current_minor -> read_queue, current_minor -> first_segment != NULL)){
+			printk(KERN_ALERT "%s: interrupted while waiting to read %d\n", DEVICE_NAME, minor);
+			return -1;
+		}
+		if (acquire_lock(current_minor, minor) != 0) return -ERESTARTSYS;
 	}
 
 	printk(KERN_INFO "%s: wants to read %zd bytes\n", DEVICE_NAME, count);
@@ -343,6 +302,9 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 		current_segment = current_minor -> first_segment;
 	}
 
+	//wake up writers
+	wake_up_interruptible(&current_minor -> write_queue);
+
 	mutex_unlock(&(current_minor -> rw_access));
 	return already_read;
 
@@ -374,15 +336,13 @@ ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, lof
 	}	
 
 	// check if new data would not fit in current available space
-	// if not different behavior should be adopted for blocking 
-	// and non-blocking access modes
-	if (current_minor -> data_count + count > current_minor -> file_size) {
+	while (current_minor -> data_count + count > current_minor -> file_size) {
 		mutex_unlock(&(current_minor -> rw_access));
 		
 		// if non-blocking exit with error
 		if (current_minor -> ac_mode == NON_BLOCK) {
 			printk(KERN_ALERT "%s: warning not enough space to write %zd\n", DEVICE_NAME, count);
-			return -1;
+			return -EAGAIN;
 		}
 
 		// if blocking put the client process to sleep
@@ -406,6 +366,9 @@ ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, lof
 		tmp = buff;
 		create_append_segments(current_minor, residual_bytes, tmp);
 	}
+
+	// wake up readers
+	wake_up_interruptible(&current_minor -> read_queue);
 
 	mutex_unlock(&(current_minor -> rw_access));
 	return count; 
@@ -519,15 +482,13 @@ int acquire_lock(minor_file * current_minor, int minor) {
  */
 
 long pktstream_ioctl(struct file *file_p, unsigned int ioctl_cmd, unsigned long ioctl_arg){
-	long result;
-	int minor;
 	minor_file * current_minor;
+	int minor;
 
 	// variables initialization
 	minor = retrieve_minor_number(file_p, "ioctl");
 	if (minor == -1) return -1;
 	current_minor = minor_files[minor];
-	result = -1;
 	
 	// acquire lock
 	if (acquire_lock(current_minor, minor) != 0) return -ERESTARTSYS;
@@ -537,41 +498,45 @@ long pktstream_ioctl(struct file *file_p, unsigned int ioctl_cmd, unsigned long 
 	// set current operative mode to packet
 	case PKTSTRM_IOCTL_SET_MODE_PACKET:
 		current_minor -> op_mode = PACKET;
-		result = 0;
 		break;
 
 	// set current operative mode to stream
 	case PKTSTRM_IOCTL_SET_MODE_STREAM:
 		current_minor -> op_mode = STREAM;
-		result = 0;
 		break;
 	
-	
+	// set current access mode to blocking
+	case PKTSTRM_IOCTL_SET_ACC_BLOCK:
+		current_minor -> ac_mode = BLOCK;
+		break;
+
+	// set current access mode to non-blocking
+	case PKTSTRM_IOCTL_SET_ACC_NO_BLOCK:
+		current_minor -> ac_mode = NON_BLOCK;
+		break;
 
 	// set segment size to passed argument
 	case PKTSTRM_IOCTL_SET_PKT_SIZE:
 		if (ioctl_arg == 0 || ioctl_arg > MAX_PKT_SIZE) {
-			printk(KERN_ALERT "%s: ioctl invalid packet size %zd\n", DEVICE_NAME, ioctl_arg);
 			mutex_unlock(&(current_minor -> rw_access));
-			return result;
+			printk(KERN_ALERT "%s: ioctl invalid packet size %zd\n", DEVICE_NAME, ioctl_arg);
+			return -1;
 		}	
 		current_minor -> def_segment_size = ioctl_arg;
-		result = 0;
 		break;
 	
 	// set file size to passed argument
 	case PKTSTRM_IOCTL_SET_FILE_SIZE:
 		if (ioctl_arg == 0 || ioctl_arg > MAX_FILE_SIZE || ioctl_arg < current_minor -> data_count) {
-			printk(KERN_ALERT "%s: ioctl invalid file size %zd\n", DEVICE_NAME, ioctl_arg);
 			mutex_unlock(&(current_minor -> rw_access));
-			return result;
+			printk(KERN_ALERT "%s: ioctl invalid file size %zd\n", DEVICE_NAME, ioctl_arg);
+			return -1;
 		}
 		current_minor -> file_size = ioctl_arg;
-		result = 0;
 		break;
 	}
 	
 	mutex_unlock(&(current_minor -> rw_access));
-	return result;
+	return 0;
 }
 
