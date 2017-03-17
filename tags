@@ -1,0 +1,66 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+BLOCK	pktstream.h	/^typedef enum {NON_BLOCK, BLOCK} access_mode;$/;"	e	enum:__anon2
+BUF_SIZE	test.c	6;"	d	file:
+DEVICE_GENERAL_LOCK	pktstream.h	11;"	d
+DEVICE_NAME	pktstream.h	5;"	d
+EXPORT_SYMTAB	pktstream.c	1;"	d	file:
+FILE_DEFAULT_SIZE	pktstream.h	10;"	d
+MAJOR_NUM	pktstream.h	6;"	d
+MAX_FILE_SIZE	pktstream.h	8;"	d
+MAX_PKT_SIZE	pktstream.h	7;"	d
+NON_BLOCK	pktstream.h	/^typedef enum {NON_BLOCK, BLOCK} access_mode;$/;"	e	enum:__anon2
+PACKET	pktstream.h	/^typedef enum {PACKET, STREAM} device_mode;$/;"	e	enum:__anon1
+PKTSTREAM_H	pktstream.h	2;"	d
+PKTSTRM_IOCTL_SET_ACC_BLOCK	pktstream.h	15;"	d
+PKTSTRM_IOCTL_SET_ACC_NO_BLOCK	pktstream.h	16;"	d
+PKTSTRM_IOCTL_SET_FILE_SIZE	pktstream.h	18;"	d
+PKTSTRM_IOCTL_SET_MODE_PACKET	pktstream.h	13;"	d
+PKTSTRM_IOCTL_SET_MODE_STREAM	pktstream.h	14;"	d
+PKTSTRM_IOCTL_SET_PKT_SIZE	pktstream.h	17;"	d
+PKT_DEFAULT_SIZE	pktstream.h	9;"	d
+STREAM	pktstream.h	/^typedef enum {PACKET, STREAM} device_mode;$/;"	e	enum:__anon1
+ac_mode	pktstream.h	/^	access_mode ac_mode;$/;"	m	struct:minor_file
+access_mode	pktstream.h	/^typedef enum {NON_BLOCK, BLOCK} access_mode;$/;"	t	typeref:enum:__anon2
+acquire_lock	pktstream.c	/^int acquire_lock(minor_file * current_minor, int minor) {$/;"	f
+byte	pktstream.h	/^typedef unsigned char byte;$/;"	t
+clients	pktstream.h	/^	unsigned int clients;$/;"	m	struct:minor_file
+create_append_segments	pktstream.c	/^void create_append_segments(minor_file * current_minor, unsigned int cur_size, const byte * tmp) {$/;"	f
+data_count	pktstream.h	/^	size_t data_count;$/;"	m	struct:minor_file
+def_segment_size	pktstream.h	/^	size_t def_segment_size;$/;"	m	struct:minor_file
+device_mode	pktstream.h	/^typedef enum {PACKET, STREAM} device_mode;$/;"	t	typeref:enum:__anon1
+file_size	pktstream.h	/^	size_t file_size;$/;"	m	struct:minor_file
+first_segment	pktstream.h	/^	segment * first_segment;$/;"	m	struct:minor_file
+general_lock	pktstream.c	/^struct mutex general_lock;$/;"	v	typeref:struct:mutex
+last_segment	pktstream.h	/^	segment * last_segment;$/;"	m	struct:minor_file
+main	test.c	/^int main() {$/;"	f
+minor_file	pktstream.h	/^typedef struct minor_file {$/;"	s
+minor_file	pktstream.h	/^} minor_file;$/;"	t	typeref:struct:minor_file
+minor_files	pktstream.c	/^static minor_file * minor_files[256] = {NULL};$/;"	v	file:
+next	pktstream.h	/^	struct segment * next;$/;"	m	struct:segment	typeref:struct:segment::segment
+op_mode	pktstream.h	/^	device_mode op_mode;$/;"	m	struct:minor_file
+pktstream_exit	pktstream.c	/^module_exit(pktstream_exit);$/;"	v
+pktstream_exit	pktstream.c	/^void pktstream_exit(void){$/;"	f
+pktstream_fops	pktstream.c	/^struct file_operations pktstream_fops = {$/;"	v	typeref:struct:file_operations
+pktstream_init	pktstream.c	/^int pktstream_init(void) {$/;"	f
+pktstream_init	pktstream.c	/^module_init(pktstream_init);$/;"	v
+pktstream_ioctl	pktstream.c	/^long pktstream_ioctl(struct file *file_p, unsigned int ioctl_cmd, unsigned long ioctl_arg){$/;"	f
+pktstream_open	pktstream.c	/^int pktstream_open(struct inode *node, struct file *file_p){$/;"	f
+pktstream_read	pktstream.c	/^ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_pos){$/;"	f
+pktstream_release	pktstream.c	/^int pktstream_release(struct inode *node, struct file *file_p){$/;"	f
+pktstream_write	pktstream.c	/^ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, loff_t *f_pos) {$/;"	f
+print_bytes	pktstream.c	/^void print_bytes(byte * buff, unsigned int cur_size) {$/;"	f
+read_files	test.c	/^void read_files(int read_size, char * read_char, int fd0, int fd1) {$/;"	f
+read_queue	pktstream.h	/^	wait_queue_head_t read_queue;$/;"	m	struct:minor_file
+retrieve_minor_number	pktstream.c	/^int retrieve_minor_number(struct file *file_p, char * operation) {$/;"	f
+rw_access	pktstream.h	/^	struct mutex rw_access;$/;"	m	struct:minor_file	typeref:struct:minor_file::mutex
+segment	pktstream.h	/^typedef struct segment {$/;"	s
+segment	pktstream.h	/^} segment;$/;"	t	typeref:struct:segment
+segment_buffer	pktstream.h	/^	byte * segment_buffer;$/;"	m	struct:segment
+segment_size	pktstream.h	/^	size_t segment_size;$/;"	m	struct:segment
+write_files	test.c	/^void write_files(int write_size, char * to_write, int fd0, int fd1, int size) {$/;"	f
+write_queue	pktstream.h	/^	wait_queue_head_t write_queue;$/;"	m	struct:minor_file
