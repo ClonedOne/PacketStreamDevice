@@ -191,11 +191,12 @@ int pktstream_release(struct inode *node, struct file *file_p){
 	current_minor -> clients--;
 	printk(KERN_INFO "%s: update client count %d for minor number %d\n", DEVICE_NAME, current_minor -> clients, minor);
 
-	// if no clients are connected, release the data structure
-	if (current_minor -> clients == 0) {
+	// if no clients are connected and no data is present,
+	// release the data structure
+	if (current_minor -> clients == 0 && current_minor -> data_count == 0) {
 		kfree(current_minor);
 		minor_files[minor] = NULL;
-		printk(KERN_INFO "%s: freed data structures related to minor number %d\n", DEVICE_NAME, minor);
+		printk(KERN_INFO "%s: freed data structures for file %d\n", DEVICE_NAME, minor);
 	}
 		
 	mutex_unlock(&general_lock);
