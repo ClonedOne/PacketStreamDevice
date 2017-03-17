@@ -29,7 +29,7 @@ access_mode	pktstream.h	/^typedef enum {NON_BLOCK, BLOCK} access_mode;$/;"	t	typ
 acquire_lock	pktstream.c	/^int acquire_lock(minor_file * current_minor, int minor) {$/;"	f
 byte	pktstream.h	/^typedef unsigned char byte;$/;"	t
 clients	pktstream.h	/^	unsigned int clients;$/;"	m	struct:minor_file
-create_append_segments	pktstream.c	/^void create_append_segments(minor_file * current_minor, unsigned int cur_size, const byte * tmp) {$/;"	f
+create_append_segments	pktstream.c	/^size_t create_append_segments(minor_file * current_minor, size_t cur_size, const byte * tmp) {$/;"	f
 data_count	pktstream.h	/^	size_t data_count;$/;"	m	struct:minor_file
 def_segment_size	pktstream.h	/^	size_t def_segment_size;$/;"	m	struct:minor_file
 device_mode	pktstream.h	/^typedef enum {PACKET, STREAM} device_mode;$/;"	t	typeref:enum:__anon1
