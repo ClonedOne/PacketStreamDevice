@@ -36,6 +36,7 @@ device_mode	pktstream.h	/^typedef enum {PACKET, STREAM} device_mode;$/;"	t	typer
 file_size	pktstream.h	/^	size_t file_size;$/;"	m	struct:minor_file
 first_segment	pktstream.h	/^	segment * first_segment;$/;"	m	struct:minor_file
 general_lock	pktstream.c	/^struct mutex general_lock;$/;"	v	typeref:struct:mutex
+is_empty	pktstream.c	/^void is_empty(minor_file * current_minor) {$/;"	f
 last_segment	pktstream.h	/^	segment * last_segment;$/;"	m	struct:minor_file
 main	test.c	/^int main() {$/;"	f
 minor_file	pktstream.h	/^typedef struct minor_file {$/;"	s

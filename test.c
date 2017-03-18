@@ -50,6 +50,7 @@ int main() {
 	read_files(read_size, read_char, fd0, fd1);
 	write_files(write_size, to_write, fd0, fd1, size);
 	read_files(read_size, read_char, fd0, fd1);
+	write_files(write_size, to_write, fd0, fd1, size);
 	read_files(read_size, read_char, fd0, fd1);
 
 	close(fd0);

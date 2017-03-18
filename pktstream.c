@@ -65,6 +65,8 @@ void print_bytes(byte * buff, unsigned int cur_size);
 
 int acquire_lock(minor_file * current_minor, int minor);
 
+void is_empty(minor_file * current_minor);
+
 
 
 /*
@@ -254,11 +256,13 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 		current_minor -> first_segment = current_segment -> next;
 		to_read = count < current_segment -> segment_size ? count : current_segment -> segment_size;
 		copy_to_user(buff, current_segment -> segment_buffer, to_read);
-		current_minor -> data_count -= to_read;
+		current_minor -> data_count -= current_segment -> segment_size;
 		kfree(current_segment -> segment_buffer);
 		kfree(current_segment);
 		mutex_unlock(&(current_minor -> rw_access));
 		printk(KERN_INFO "%s: current file size = %zd\n", DEVICE_NAME, current_minor -> data_count);
+		is_empty(current_minor);
+		wake_up_interruptible(&current_minor -> write_queue);
 		return to_read;
 	}
 
@@ -270,7 +274,7 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 	// already_read keeps the current amount of bytes read 
 	already_read = 0;
 
-	while (already_read < count && current_segment -> segment_buffer != NULL) {
+	while (already_read < count && current_segment != NULL) {
 		
 		/* if the size of data contained in this segment plus what has already
 		 * been read fit in the receiving buffer, read it
@@ -283,7 +287,6 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 			to_read = current_segment -> segment_size;
 			copy_to_user(buff + already_read, current_segment -> segment_buffer, to_read);
 			current_minor -> first_segment = current_segment -> next;
-			current_minor -> data_count -= to_read;
 			kfree(current_segment -> segment_buffer);
 			kfree(current_segment);	
 		} else {
@@ -294,19 +297,19 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 			copy_to_user(buff + already_read, current_segment -> segment_buffer, to_read);
 			temporary_buffer = kzalloc(remaining_bytes, GFP_KERNEL);
 			memcpy(temporary_buffer, current_segment -> segment_buffer + to_read, remaining_bytes);	
-			current_minor -> data_count -= to_read;
 			kfree(current_segment -> segment_buffer);
 			current_segment -> segment_buffer = temporary_buffer;
 			current_segment -> segment_size = remaining_bytes;
 		}
 
+		current_minor -> data_count -= to_read;
 		printk(KERN_INFO "%s: to_read = %zd\n", DEVICE_NAME, to_read);
 		already_read += to_read;
 		printk(KERN_INFO "%s: already_read = %zd, count = %zd\n", DEVICE_NAME, already_read, count);
 		current_segment = current_minor -> first_segment;
 	}
 
-	//wake up writers
+	is_empty(current_minor);
 	wake_up_interruptible(&current_minor -> write_queue);
 
 	mutex_unlock(&(current_minor -> rw_access));
@@ -385,6 +388,14 @@ ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, lof
 /*
  * Helper functions
  */
+
+/* check if current file is empty 
+ * if true set last segment to NULL
+ */
+void is_empty(minor_file * current_minor) {
+	if (current_minor -> first_segment == NULL)
+		current_minor -> last_segment = NULL;
+}
 
 /*
  * retrieve minor number from file pointer 
