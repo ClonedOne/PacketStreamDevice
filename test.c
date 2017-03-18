@@ -11,15 +11,16 @@
  */
 
 void read_files(int read_size, char * read_char, int fd0, int fd1) {
-	read_size = read(fd0, read_char, 4);
+	read_size = read(fd0, read_char, BUF_SIZE);
 	printf("Bytes read: %d, Content: %s\n", read_size, read_char);
 	memset(read_char, 0, BUF_SIZE);
-	read_size = read(fd1, read_char, 2);
+	read_size = read(fd1, read_char, BUF_SIZE);
 	printf("Bytes read: %d, Content: %s\n", read_size, read_char);
 	memset(read_char, 0, BUF_SIZE); 
 }
 
 void write_files(int write_size, char * to_write, int fd0, int fd1, int size) {
+	printf("Attempting to write %d bytes\n", size);
 	write_size = write(fd0, to_write, size);
 	printf("Bytes written: %d\n", write_size);
 	write_size = write(fd1, to_write, size);
@@ -34,11 +35,15 @@ int main() {
 	int write_size;
 	char * read_char;
 	char * to_write;
+	char * lorem;
 	int size;
+	int loerm_size;
+
+	lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+	loerm_size = strlen(lorem);
 
 	read_char = malloc(BUF_SIZE);
-	// char write_char = 'c';
-	// to_write = &write_char;
+	
 	to_write = "test";
 	size = strlen(to_write);
 
@@ -48,7 +53,7 @@ int main() {
 	printf("file descriptors: %d - %d\n", fd0, fd1);
 	
 	read_files(read_size, read_char, fd0, fd1);
-	write_files(write_size, to_write, fd0, fd1, size);
+	write_files(write_size, lorem, fd0, fd1, loerm_size);
 	read_files(read_size, read_char, fd0, fd1);
 	write_files(write_size, to_write, fd0, fd1, size);
 	read_files(read_size, read_char, fd0, fd1);

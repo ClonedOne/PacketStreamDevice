@@ -4,9 +4,9 @@
 #include <linux/init.h>
 #include <linux/fs.h>
 #include <linux/slab.h>
-#include <linux/sched.h>	
-#include <linux/wait.h>	
-#include <linux/pid.h>	
+#include <linux/sched.h>
+#include <linux/wait.h>
+#include <linux/pid.h>
 #include <linux/tty.h>
 #include <linux/version.h>
 #include <asm/mutex.h>
@@ -99,14 +99,14 @@ module_exit(pktstream_exit);
 
 int pktstream_init(void) {
 	int major_num;
-	
+
 	// Try to register device major number
-	major_num = register_chrdev(MAJOR_NUM, DEVICE_NAME, &pktstream_fops); 
+	major_num = register_chrdev(MAJOR_NUM, DEVICE_NAME, &pktstream_fops);
 	if (major_num < 0){
 		printk(KERN_ALERT "%s: cannot obtain major number %d\n", DEVICE_NAME, MAJOR_NUM);
 		return major_num;
 	}
-	printk(KERN_INFO "%s: registered correctly with major number %d\n",DEVICE_NAME, MAJOR_NUM);	
+	printk(KERN_INFO "%s: registered correctly with major number %d\n",DEVICE_NAME, MAJOR_NUM);
 
 	mutex_init(&general_lock);
 
@@ -128,7 +128,7 @@ void pktstream_exit(void){
 
 int pktstream_open(struct inode *node, struct file *file_p){
 	minor_file * current_minor;
-	
+
 	// retrieving minor number from file descriptor
 	int minor = iminor(file_p -> f_path.dentry -> d_inode);
 	printk(KERN_INFO "%s: opening minor number %d\n", DEVICE_NAME, minor);
@@ -137,9 +137,9 @@ int pktstream_open(struct inode *node, struct file *file_p){
 	if (minor > 255) {
 		printk(KERN_ALERT "%s: warning opening an invalid minor number %d\n", DEVICE_NAME, minor);
 		return -1;
-	}	
+	}
 
-	// obtain general lock 
+	// obtain general lock
 	if (acquire_lock(NULL, DEVICE_GENERAL_LOCK) != 0) return -ERESTARTSYS;
 
 	// if minor number data structure is not initialized, do it
@@ -150,8 +150,8 @@ int pktstream_open(struct inode *node, struct file *file_p){
 			mutex_unlock(&general_lock);
 			return -1;
 		}
-		
-		// initialize current minor's default values 
+
+		// initialize current minor's default values
 		current_minor -> first_segment = NULL;
 		current_minor -> last_segment = NULL;
 		current_minor -> clients = 1;
@@ -180,12 +180,12 @@ int pktstream_open(struct inode *node, struct file *file_p){
 
 int pktstream_release(struct inode *node, struct file *file_p){
 	minor_file * current_minor;
-	int minor;	
+	int minor;
 
 	minor = retrieve_minor_number(file_p, "release");
 	if (minor == -1) return -1;
 
-	// obtain general lock 
+	// obtain general lock
 	if (acquire_lock(NULL, DEVICE_GENERAL_LOCK) != 0) return -ERESTARTSYS;
 
 	// decrease clients counter for minor file
@@ -200,7 +200,7 @@ int pktstream_release(struct inode *node, struct file *file_p){
 		minor_files[minor] = NULL;
 		printk(KERN_INFO "%s: freed data structures for file %d\n", DEVICE_NAME, minor);
 	}
-		
+
 	mutex_unlock(&general_lock);
 	return 0;
 }
@@ -223,7 +223,7 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 	minor = retrieve_minor_number(file_p, "read");
 	if (minor == -1) return -1;
 	current_minor = minor_files[minor];
-	
+
 	// acquire lock
 	if(acquire_lock(current_minor, minor) != 0) return -ERESTARTSYS;
 
@@ -234,9 +234,9 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 		// if non-blocking exit with error
 		if (current_minor -> ac_mode == NON_BLOCK) {
 			printk(KERN_ALERT "%s: warning reading empty file %d\n", DEVICE_NAME, minor);
-			return -EAGAIN;
+			return 0;
 		}
-		
+
 		// if blocking put the client process to sleep
 		if (wait_event_interruptible(current_minor -> read_queue, current_minor -> first_segment != NULL)){
 			printk(KERN_ALERT "%s: interrupted while waiting to read %d\n", DEVICE_NAME, minor);
@@ -271,11 +271,11 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 	 * is filled; residual bytes will become a new packet
 	 */
 	printk(KERN_INFO "%s: reading as stream\n", DEVICE_NAME);
-	// already_read keeps the current amount of bytes read 
+	// already_read keeps the current amount of bytes read
 	already_read = 0;
 
 	while (already_read < count && current_segment != NULL) {
-		
+
 		/* if the size of data contained in this segment plus what has already
 		 * been read fit in the receiving buffer, read it
 		 *
@@ -288,7 +288,7 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 			copy_to_user(buff + already_read, current_segment -> segment_buffer, to_read);
 			current_minor -> first_segment = current_segment -> next;
 			kfree(current_segment -> segment_buffer);
-			kfree(current_segment);	
+			kfree(current_segment);
 		} else {
 			printk(KERN_INFO "%s: must split segment\n", DEVICE_NAME);
 			remaining_bytes = (already_read + current_segment -> segment_size) - count;
@@ -296,7 +296,7 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 			to_read = current_segment -> segment_size - remaining_bytes;
 			copy_to_user(buff + already_read, current_segment -> segment_buffer, to_read);
 			temporary_buffer = kzalloc(remaining_bytes, GFP_KERNEL);
-			memcpy(temporary_buffer, current_segment -> segment_buffer + to_read, remaining_bytes);	
+			memcpy(temporary_buffer, current_segment -> segment_buffer + to_read, remaining_bytes);
 			kfree(current_segment -> segment_buffer);
 			current_segment -> segment_buffer = temporary_buffer;
 			current_segment -> segment_size = remaining_bytes;
@@ -315,7 +315,7 @@ ssize_t pktstream_read(struct file *file_p, char *buff, size_t count, loff_t *f_
 	mutex_unlock(&(current_minor -> rw_access));
 	return already_read;
 
-}	
+}
 
 ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, loff_t *f_pos) {
 	minor_file * current_minor;
@@ -326,14 +326,15 @@ ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, lof
 	size_t size_written;
 	int minor;
 	int i;
-		
+
 	minor = retrieve_minor_number(file_p, "write");
 	if (minor == -1) return -1;
 	current_minor = minor_files[minor];
-	
+
 	// acquire lock
 	if (acquire_lock(current_minor, minor) != 0) return -ERESTARTSYS;
 
+	printk(KERN_INFO "%s: writing %zd bytes on %d", DEVICE_NAME, count, minor);
 	pkt_size = current_minor -> def_segment_size;
 
 	// check size of write is admissible
@@ -341,16 +342,16 @@ ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, lof
 		printk(KERN_ALERT "%s: warning message size not admissible %zd\n", DEVICE_NAME, count);
 		mutex_unlock(&(current_minor -> rw_access));
 		return -1;
-	}	
+	}
 
 	// check if new data would not fit in current available space
 	while (current_minor -> data_count + count > current_minor -> file_size) {
 		mutex_unlock(&(current_minor -> rw_access));
-		
+
 		// if non-blocking exit with error
 		if (current_minor -> ac_mode == NON_BLOCK) {
 			printk(KERN_ALERT "%s: warning not enough space to write %zd\n", DEVICE_NAME, count);
-			return -EAGAIN;
+			return 0;
 		}
 
 		// if blocking put the client process to sleep
@@ -363,7 +364,7 @@ ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, lof
 
 	// compute number of packets necessary to contain data
 	num_pkts = count / pkt_size;
-       	residual_bytes = count % pkt_size;	
+       	residual_bytes = count % pkt_size;
 
 	// generate new packets and append them
 	size_written = 0;
@@ -372,7 +373,7 @@ ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, lof
 		size_written += create_append_segments(current_minor, pkt_size, tmp);
 	}
 	if (residual_bytes != 0) {
-		tmp = buff;
+		tmp = buff + (pkt_size * i);
 		size_written += create_append_segments(current_minor, residual_bytes, tmp);
 	}
 
@@ -380,8 +381,8 @@ ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, lof
 	wake_up_interruptible(&current_minor -> read_queue);
 
 	mutex_unlock(&(current_minor -> rw_access));
-	return size_written; 
-}	
+	return size_written;
+}
 
 
 
@@ -389,7 +390,7 @@ ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, lof
  * Helper functions
  */
 
-/* check if current file is empty 
+/* check if current file is empty
  * if true set last segment to NULL
  */
 void is_empty(minor_file * current_minor) {
@@ -398,12 +399,12 @@ void is_empty(minor_file * current_minor) {
 }
 
 /*
- * retrieve minor number from file pointer 
+ * retrieve minor number from file pointer
  * check if related device file is initialized
  */
 int retrieve_minor_number(struct file *file_p, char * operation) {
 	int minor;
-	
+
 	// retrieving minor number from file descriptor
 	minor = iminor(file_p -> f_path.dentry -> d_inode);
 	printk(KERN_INFO "%s: %s on minor number %d\n", DEVICE_NAME, operation, minor);
@@ -415,7 +416,7 @@ int retrieve_minor_number(struct file *file_p, char * operation) {
 	}
 
 	// check if minor number was not previously initialized
-	if (minor_files[minor] == NULL) {			
+	if (minor_files[minor] == NULL) {
 		printk(KERN_ALERT "%s: %s on non initialized minor number %d\n", DEVICE_NAME, operation, minor);
 		return -1;
 	}
@@ -423,7 +424,7 @@ int retrieve_minor_number(struct file *file_p, char * operation) {
 	return minor;
 }
 
-/* 
+/*
  * create and append a new segment
  */
 size_t create_append_segments(minor_file * current_minor, size_t cur_size, const byte * tmp) {
@@ -437,7 +438,7 @@ size_t create_append_segments(minor_file * current_minor, size_t cur_size, const
 	}
 	current_segment -> segment_size = cur_size;
 	current_segment -> next = NULL;
-	
+
 	// allocate new segment data
 	current_segment -> segment_buffer = kzalloc(cur_size, GFP_KERNEL);
 	if (!current_segment -> segment_buffer){
@@ -457,7 +458,7 @@ size_t create_append_segments(minor_file * current_minor, size_t cur_size, const
 		current_minor -> last_segment = current_segment;
 	}
 
-	print_bytes(current_segment -> segment_buffer, current_segment -> segment_size);
+	/** print_bytes(current_segment -> segment_buffer, current_segment -> segment_size); */
 	current_minor -> data_count += cur_size;
 	return cur_size;
 }
@@ -468,7 +469,7 @@ size_t create_append_segments(minor_file * current_minor, size_t cur_size, const
 void print_bytes(byte * buff, unsigned int cur_size) {
 	int i;
 
-	printk(KERN_INFO "%s: %d bytes ", DEVICE_NAME, cur_size); 
+	printk(KERN_INFO "%s: %d bytes ", DEVICE_NAME, cur_size);
 	for (i = 0; i < cur_size; i++)
 		printk(KERN_INFO "%02X ", buff[i]);
 	printk(KERN_INFO "\n");
@@ -507,7 +508,7 @@ long pktstream_ioctl(struct file *file_p, unsigned int ioctl_cmd, unsigned long 
 	minor = retrieve_minor_number(file_p, "ioctl");
 	if (minor == -1) return -1;
 	current_minor = minor_files[minor];
-	
+
 	// acquire lock
 	if (acquire_lock(current_minor, minor) != 0) return -ERESTARTSYS;
 
@@ -522,7 +523,7 @@ long pktstream_ioctl(struct file *file_p, unsigned int ioctl_cmd, unsigned long 
 	case PKTSTRM_IOCTL_SET_MODE_STREAM:
 		current_minor -> op_mode = STREAM;
 		break;
-	
+
 	// set current access mode to blocking
 	case PKTSTRM_IOCTL_SET_ACC_BLOCK:
 		current_minor -> ac_mode = BLOCK;
@@ -539,10 +540,10 @@ long pktstream_ioctl(struct file *file_p, unsigned int ioctl_cmd, unsigned long 
 			mutex_unlock(&(current_minor -> rw_access));
 			printk(KERN_ALERT "%s: ioctl invalid packet size %zd\n", DEVICE_NAME, ioctl_arg);
 			return -1;
-		}	
+		}
 		current_minor -> def_segment_size = ioctl_arg;
 		break;
-	
+
 	// set file size to passed argument
 	case PKTSTRM_IOCTL_SET_FILE_SIZE:
 		if (ioctl_arg == 0 || ioctl_arg > MAX_FILE_SIZE || ioctl_arg < current_minor -> data_count) {
@@ -553,7 +554,7 @@ long pktstream_ioctl(struct file *file_p, unsigned int ioctl_cmd, unsigned long 
 		current_minor -> file_size = ioctl_arg;
 		break;
 	}
-	
+
 	mutex_unlock(&(current_minor -> rw_access));
 	return 0;
 }
