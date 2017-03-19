@@ -5,45 +5,48 @@
 !_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
 !_TAG_PROGRAM_VERSION	5.9~svn20110310	//
 BLOCK	pktstream.h	/^typedef enum {NON_BLOCK, BLOCK} access_mode;$/;"	e	enum:__anon2
-BUF_SIZE	test.c	6;"	d	file:
-DEVICE_GENERAL_LOCK	pktstream.h	11;"	d
-DEVICE_NAME	pktstream.h	5;"	d
+BUF_SIZE	test.c	9;"	d	file:
+DEVICE_GENERAL_LOCK	pktstream.h	12;"	d
+DEVICE_NAME	pktstream.h	6;"	d
 EXPORT_SYMTAB	pktstream.c	1;"	d	file:
-FILE_DEFAULT_SIZE	pktstream.h	10;"	d
-MAJOR_NUM	pktstream.h	6;"	d
-MAX_FILE_SIZE	pktstream.h	8;"	d
-MAX_PKT_SIZE	pktstream.h	7;"	d
+FILE_DEFAULT_SIZE	pktstream.h	11;"	d
+MAJOR_NUM	pktstream.h	7;"	d
+MAX_FILE_SIZE	pktstream.h	9;"	d
+MAX_PKT_SIZE	pktstream.h	8;"	d
 NON_BLOCK	pktstream.h	/^typedef enum {NON_BLOCK, BLOCK} access_mode;$/;"	e	enum:__anon2
 PACKET	pktstream.h	/^typedef enum {PACKET, STREAM} device_mode;$/;"	e	enum:__anon1
 PKTSTREAM_H	pktstream.h	2;"	d
-PKTSTRM_IOCTL_SET_ACC_BLOCK	pktstream.h	15;"	d
-PKTSTRM_IOCTL_SET_ACC_NO_BLOCK	pktstream.h	16;"	d
-PKTSTRM_IOCTL_SET_FILE_SIZE	pktstream.h	18;"	d
-PKTSTRM_IOCTL_SET_MODE_PACKET	pktstream.h	13;"	d
-PKTSTRM_IOCTL_SET_MODE_STREAM	pktstream.h	14;"	d
-PKTSTRM_IOCTL_SET_PKT_SIZE	pktstream.h	17;"	d
-PKT_DEFAULT_SIZE	pktstream.h	9;"	d
+PKTSTREAM_LIB_H	pktstream_lib.h	2;"	d
+PKTSTRM_IOCTL_SET_ACC_BLOCK	pktstream.h	16;"	d
+PKTSTRM_IOCTL_SET_ACC_NO_BLOCK	pktstream.h	17;"	d
+PKTSTRM_IOCTL_SET_FILE_SIZE	pktstream.h	19;"	d
+PKTSTRM_IOCTL_SET_MODE_PACKET	pktstream.h	14;"	d
+PKTSTRM_IOCTL_SET_MODE_STREAM	pktstream.h	15;"	d
+PKTSTRM_IOCTL_SET_PKT_SIZE	pktstream.h	18;"	d
+PKT_DEFAULT_SIZE	pktstream.h	10;"	d
 STREAM	pktstream.h	/^typedef enum {PACKET, STREAM} device_mode;$/;"	e	enum:__anon1
-ac_mode	pktstream.h	/^	access_mode ac_mode;$/;"	m	struct:minor_file
+ac_mode	pktstream.c	/^	access_mode ac_mode;$/;"	m	struct:minor_file	file:
 access_mode	pktstream.h	/^typedef enum {NON_BLOCK, BLOCK} access_mode;$/;"	t	typeref:enum:__anon2
 acquire_lock	pktstream.c	/^int acquire_lock(minor_file * current_minor, int minor) {$/;"	f
 byte	pktstream.h	/^typedef unsigned char byte;$/;"	t
-clients	pktstream.h	/^	unsigned int clients;$/;"	m	struct:minor_file
+clients	pktstream.c	/^	unsigned int clients;$/;"	m	struct:minor_file	file:
 create_append_segments	pktstream.c	/^size_t create_append_segments(minor_file * current_minor, size_t cur_size, const byte * tmp) {$/;"	f
-data_count	pktstream.h	/^	size_t data_count;$/;"	m	struct:minor_file
-def_segment_size	pktstream.h	/^	size_t def_segment_size;$/;"	m	struct:minor_file
+data_count	pktstream.c	/^	size_t data_count;$/;"	m	struct:minor_file	file:
+def_segment_size	pktstream.c	/^	size_t def_segment_size;$/;"	m	struct:minor_file	file:
 device_mode	pktstream.h	/^typedef enum {PACKET, STREAM} device_mode;$/;"	t	typeref:enum:__anon1
-file_size	pktstream.h	/^	size_t file_size;$/;"	m	struct:minor_file
-first_segment	pktstream.h	/^	segment * first_segment;$/;"	m	struct:minor_file
+fd0	test.c	/^int fd0;$/;"	v
+fd1	test.c	/^int fd1;$/;"	v
+file_size	pktstream.c	/^	size_t file_size;$/;"	m	struct:minor_file	file:
+first_segment	pktstream.c	/^	segment * first_segment;$/;"	m	struct:minor_file	file:
 general_lock	pktstream.c	/^struct mutex general_lock;$/;"	v	typeref:struct:mutex
 is_empty	pktstream.c	/^void is_empty(minor_file * current_minor) {$/;"	f
-last_segment	pktstream.h	/^	segment * last_segment;$/;"	m	struct:minor_file
+last_segment	pktstream.c	/^	segment * last_segment;$/;"	m	struct:minor_file	file:
 main	test.c	/^int main() {$/;"	f
-minor_file	pktstream.h	/^typedef struct minor_file {$/;"	s
-minor_file	pktstream.h	/^} minor_file;$/;"	t	typeref:struct:minor_file
+minor_file	pktstream.c	/^typedef struct minor_file {$/;"	s	file:
+minor_file	pktstream.c	/^} minor_file;$/;"	t	typeref:struct:minor_file	file:
 minor_files	pktstream.c	/^static minor_file * minor_files[256] = {NULL};$/;"	v	file:
-next	pktstream.h	/^	struct segment * next;$/;"	m	struct:segment	typeref:struct:segment::segment
-op_mode	pktstream.h	/^	device_mode op_mode;$/;"	m	struct:minor_file
+next	pktstream.c	/^	struct segment * next;$/;"	m	struct:segment	typeref:struct:segment::segment	file:
+op_mode	pktstream.c	/^	device_mode op_mode;$/;"	m	struct:minor_file	file:
 pktstream_exit	pktstream.c	/^module_exit(pktstream_exit);$/;"	v
 pktstream_exit	pktstream.c	/^void pktstream_exit(void){$/;"	f
 pktstream_fops	pktstream.c	/^struct file_operations pktstream_fops = {$/;"	v	typeref:struct:file_operations
@@ -55,13 +58,25 @@ pktstream_read	pktstream.c	/^ssize_t pktstream_read(struct file *file_p, char *b
 pktstream_release	pktstream.c	/^int pktstream_release(struct inode *node, struct file *file_p){$/;"	f
 pktstream_write	pktstream.c	/^ssize_t pktstream_write(struct file *file_p, const char *buff, size_t count, loff_t *f_pos) {$/;"	f
 print_bytes	pktstream.c	/^void print_bytes(byte * buff, unsigned int cur_size) {$/;"	f
-read_files	test.c	/^void read_files(int read_size, char * read_char, int fd0, int fd1) {$/;"	f
-read_queue	pktstream.h	/^	wait_queue_head_t read_queue;$/;"	m	struct:minor_file
+read_files	test.c	/^void read_files(char * read_char) {$/;"	f
+read_queue	pktstream.c	/^	wait_queue_head_t read_queue;$/;"	m	struct:minor_file	file:
+read_to_empty	test.c	/^void read_to_empty(char * read_char){$/;"	f
 retrieve_minor_number	pktstream.c	/^int retrieve_minor_number(struct file *file_p, char * operation) {$/;"	f
-rw_access	pktstream.h	/^	struct mutex rw_access;$/;"	m	struct:minor_file	typeref:struct:minor_file::mutex
-segment	pktstream.h	/^typedef struct segment {$/;"	s
-segment	pktstream.h	/^} segment;$/;"	t	typeref:struct:segment
-segment_buffer	pktstream.h	/^	byte * segment_buffer;$/;"	m	struct:segment
-segment_size	pktstream.h	/^	size_t segment_size;$/;"	m	struct:segment
-write_files	test.c	/^void write_files(int write_size, char * to_write, int fd0, int fd1, int size) {$/;"	f
-write_queue	pktstream.h	/^	wait_queue_head_t write_queue;$/;"	m	struct:minor_file
+rw_access	pktstream.c	/^	struct mutex rw_access;$/;"	m	struct:minor_file	typeref:struct:minor_file::mutex	file:
+segment	pktstream.c	/^typedef struct segment {$/;"	s	file:
+segment	pktstream.c	/^} segment;$/;"	t	typeref:struct:segment	file:
+segment_buffer	pktstream.c	/^	byte * segment_buffer;$/;"	m	struct:segment	file:
+segment_size	pktstream.c	/^	size_t segment_size;$/;"	m	struct:segment	file:
+set_access_blocking	pktstream_lib.c	/^void set_access_blocking(int fd){$/;"	f
+set_access_non_blocking	pktstream_lib.c	/^void set_access_non_blocking(int fd){$/;"	f
+set_file_size	pktstream_lib.c	/^int set_file_size(int fd, unsigned long size){$/;"	f
+set_mode_packet	pktstream_lib.c	/^void set_mode_packet(int fd){$/;"	f
+set_mode_stream	pktstream_lib.c	/^void set_mode_stream(int fd){$/;"	f
+set_packet_size	pktstream_lib.c	/^int set_packet_size(int fd, unsigned long size){$/;"	f
+t1	test.c	/^pthread_t t1; $/;"	v
+t2	test.c	/^pthread_t t2; $/;"	v
+test_cuncurrency	test.c	/^void *test_cuncurrency(void * to_write){$/;"	f
+test_packet	test.c	/^void test_packet(char *to_write, int size, char *read_char){$/;"	f
+test_stream	test.c	/^void test_stream(char *to_write, int size, char *read_char){$/;"	f
+write_files	test.c	/^void write_files(char * to_write, int size) {$/;"	f
+write_queue	pktstream.c	/^	wait_queue_head_t write_queue;$/;"	m	struct:minor_file	file:

@@ -27,6 +27,59 @@ MODULE_DESCRIPTION("Multi-mode packet stream device file");
 MODULE_VERSION("0.1");
 
 
+
+/*
+ * Data structures used by the module
+ */
+
+typedef struct segment {
+	// current segment size
+	size_t segment_size;
+	
+	// pointer to the next segment in the linked list
+	struct segment * next;
+
+	// pointer to the actual data
+	byte * segment_buffer;
+} segment;
+
+typedef struct minor_file {
+	// number of clients using this minor
+	unsigned int clients;
+
+	// current amount of data bytes maintained in segments
+	size_t data_count;
+
+	// current default segment size
+	size_t def_segment_size;
+
+	// current maximum file size
+	size_t file_size;
+
+	// semaphore for both read and write access
+	struct mutex rw_access;
+
+	// wait queue for reading access
+	wait_queue_head_t read_queue;
+	
+	// wait queue for writing access
+	wait_queue_head_t write_queue;
+
+	// operational mode of the file
+	device_mode op_mode;
+
+	// access mode of the file
+	access_mode ac_mode;
+
+	// pointer to the first data segment in the minor file
+	segment * first_segment;
+
+	// pointer to the last data segment in the minor file
+	segment * last_segment;
+} minor_file;
+
+
+
 /*
  * Global variables for the module
  */
