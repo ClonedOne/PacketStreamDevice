@@ -73,3 +73,11 @@ structures employed are:
 The two segment pointers are used for fast access to data during read and write
 operations given the FIFO semantic.
 
+
+###Use
+
+The module can be compiled with the provided make-file. The major number used
+is 75. Besides the provided test script, the device file can be tested with 
+standard shell tools like cat and echo.
+
+
