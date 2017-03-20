@@ -1,7 +1,8 @@
 #Multi Mode Packet/Stream Device Driver
 
-This project contains the code for a multi-mode device driver for the Linux Kernel. 
-Goal of the driver is to provide a device file adherent to the following, provided, specifications.
+This project contains the code for a multi-mode device driver for the Linux
+Kernel.  Goal of the driver is to provide a device file adherent to the
+following, provided, specifications.
 
 
 ###Specifications
@@ -45,3 +46,30 @@ reasonable policies, are:
    instance of the device file
  - the range of device file minor numbers supported by the driver (it could be
    the interval [0-255] or not) 
+
+
+###Design
+
+The module was designed considering no a-priori assumption on the usage model
+(such as frequent short messages or sporadic long messages). Concurrency is
+granted through the use of mutex objects and a read and  write queues are
+provided for each file, to allow blocking and non-blocking access modes.
+
+Each file is organized as a linked list of data segments. The main data
+structures employed are:
+ 
+ - minor_file
+    - current number of connected clients and amount of data contained
+    - current data segment size and maximum file size for writing operations
+    - read/write access mutex
+    - read and write wait queues
+    - current access and operational modes (blocking/non-blocking, packet/stream)
+    - pointers to the first and last segments of the maintained linked list
+ - segment 
+    - segment length
+    - pointer to next segment
+    - pointer to the actual data buffer
+
+The two segment pointers are used for fast access to data during read and write
+operations given the FIFO semantic.
+
