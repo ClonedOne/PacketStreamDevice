@@ -80,6 +80,7 @@ void *test_cuncurrency(void * to_write){
 	
 	for (i = 0; i < 10; i++){
 		write_size = write(fd0, to_write, size);
+		usleep(2000);
 	}
 
 	return NULL;
@@ -125,8 +126,6 @@ int main() {
 	set_mode_stream(fd1);
 	test_stream(lorem, loerm_size, read_char);
 
-
-
 	printf("------------------------------------------------------------\n");
 	printf("Testing device in cuncurrent access\n");
 
@@ -140,9 +139,21 @@ int main() {
 	
 	pthread_join(t1, NULL);
 	pthread_join(t2, NULL); 
-
 	read_to_empty(read_char);
 	
+	printf("------------------------------------------------------------\n");
+	printf("Testing different packet size\n");
+
+	set_mode_packet(fd0);
+	set_mode_packet(fd1);
+	set_packet_size(fd0, 16);
+	set_packet_size(fd1, 16);
+
+	test_packet(lorem, loerm_size, read_char);
+	set_mode_stream(fd0);
+	set_mode_stream(fd1);
+	test_stream(lorem, loerm_size, read_char);
+
 	close(fd0);
 	close(fd1);
 	return 0;
