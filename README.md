@@ -1,11 +1,11 @@
-#Multi Mode Packet/Stream Device Driver
+# Multi Mode Packet/Stream Device Driver
 
 This project contains the code for a multi-mode device driver for the Linux
 Kernel.  Goal of the driver is to provide a device file adherent to the
 following, provided, specifications.
 
 
-###Specifications
+### Specifications
 
 This specification relates to the implementation of a special device file that
 is accessible according to FIFO style semantic (via open/close/read/write
@@ -48,7 +48,7 @@ reasonable policies, are:
    the interval [0-255] or not) 
 
 
-###Design
+### Design
 
 The module was designed considering no a-priori assumption on the usage model
 (such as frequent short messages or sporadic long messages). Concurrency is
@@ -74,7 +74,7 @@ The two segment pointers are used for fast access to data during read and write
 operations given the FIFO semantic.
 
 
-###Use
+### Use
 
 The module can be compiled with the provided make-file. The major number used
 is 75. Besides the provided test script, the device file can be tested with 
